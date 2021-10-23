@@ -380,8 +380,7 @@ export class CustomCommandCommand extends BaseGuildCommand {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { _, ...addFlags } = parse.flags([], flagsRaw);
         const flags = [...match.flags ?? []];
-        for (const flag of Object.keys(addFlags)) {
-            const args = addFlags[flag];
+        for (const [flag, args] of Object.entries(addFlags)) {
             if (args === undefined || args.length === 0)
                 return this.error(`No word was specified for the \`${flag}\` flag`);
 
@@ -597,9 +596,15 @@ export class CustomCommandCommand extends BaseGuildCommand {
         if (content === undefined)
             return;
 
-        const analysis = context.bbtag.check(content);
-        if (analysis.errors.length > 0)
-            return this.error(`There were errors with the bbtag you provided!\n${bbtagUtil.stringifyAnalysis(analysis)}`);
+        const compiled = await context.bbtag.compile(content, {
+            message: context.message,
+            author: context.message.author.id,
+            inputRaw: '',
+            isCC: true,
+            limit: 'customCommandLimit'
+        });
+        if (compiled.errors.length > 0)
+            return this.error(`There were errors with the bbtag you provided!\n${bbtagUtil.stringifyCompileOutput(compiled)}`);
 
         const command = {
             content: content,
@@ -614,7 +619,7 @@ export class CustomCommandCommand extends BaseGuildCommand {
 
         await context.database.guilds.setCommand(context.channel.guild.id, commandName, command);
 
-        return this.success(`Custom command \`${commandName}\` ${operation}.\n${bbtagUtil.stringifyAnalysis(analysis)}`);
+        return this.success(`Custom command \`${commandName}\` ${operation}.\n${bbtagUtil.stringifyCompileOutput(compiled)}`);
     }
     private async requestCommandName(
         context: GuildCommandContext,
@@ -757,7 +762,7 @@ async function requestSafe(url: string): Promise<unknown> {
 }
 
 /* eslint-disable @typescript-eslint/naming-convention */
-const flagKeys = Object.keys<{ [P in Letter]: 0 }>({
+const flagKeys = Object.keys<Letter>({
     'a': 0, 'b': 0, 'c': 0, 'd': 0, 'e': 0, 'f': 0, 'g': 0, 'h': 0, 'i': 0, 'j': 0, 'k': 0, 'l': 0, 'm': 0, 'n': 0, 'o': 0, 'p': 0, 'q': 0, 'r': 0, 's': 0, 't': 0, 'u': 0, 'v': 0, 'w': 0, 'x': 0, 'y': 0, 'z': 0,
     'A': 0, 'B': 0, 'C': 0, 'D': 0, 'E': 0, 'F': 0, 'G': 0, 'H': 0, 'I': 0, 'J': 0, 'K': 0, 'L': 0, 'M': 0, 'N': 0, 'O': 0, 'P': 0, 'Q': 0, 'R': 0, 'S': 0, 'T': 0, 'U': 0, 'V': 0, 'W': 0, 'X': 0, 'Y': 0, 'Z': 0
 });

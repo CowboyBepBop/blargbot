@@ -1,5 +1,4 @@
-import { BaseSubtag, BBTagContext } from '@cluster/bbtag';
-import { SubtagCall } from '@cluster/types';
+import { BaseSubtag, InvalidEmbedError } from '@cluster/bbtag';
 import { parse, SubtagType } from '@cluster/utils';
 import { EmbedFieldData, MessageEmbedOptions } from 'discord.js';
 
@@ -57,7 +56,7 @@ const fields = [
 
 type Overwrite<T, U> = Pick<T, Exclude<keyof T, keyof U>> & U;
 // custom message for fields missing values/names
-type EmbedBuildOptions = Overwrite<MessageEmbedOptions, { fields?: Array<Partial<EmbedFieldData>>;}>
+type EmbedBuildOptions = Overwrite<MessageEmbedOptions, { fields?: Array<Partial<EmbedFieldData>>; }>
 
 export class EmbedBuildSubag extends BaseSubtag {
     public constructor() {
@@ -66,30 +65,27 @@ export class EmbedBuildSubag extends BaseSubtag {
             category: SubtagType.MESSAGE,
             aliases: ['buildembed'],
             desc: 'This tag is designed to allow you to generate embed code for `{webhook}` and `{embed}` with much less effort.\n' +
-            'This tag uses a key/value system, with each entry in `values` looking like `key:value`.\n\n' +
-            'Valid keys are:\n' + fields.map(k => '`' + k.key + '`' + (k.desc === undefined ? '' : ' - ' + k.desc)).join('\n') + '\n\n' +
-            'You can find information about embeds [here (embed structure)](https://discordapp.com/developers/docs/resources/channel#embed-object) ' +
-            'and [here (embed limits)](https://discordapp.com/developers/docs/resources/channel#embed-limits) as well as a useful tool for testing embeds ' +
-            '[here](https://leovoel.github.io/embed-visualizer/)',
+                'This tag uses a key/value system, with each entry in `values` looking like `key:value`.\n\n' +
+                'Valid keys are:\n' + fields.map(k => '`' + k.key + '`' + (k.desc === undefined ? '' : ' - ' + k.desc)).join('\n') + '\n\n' +
+                'You can find information about embeds [here (embed structure)](https://discordapp.com/developers/docs/resources/channel#embed-object) ' +
+                'and [here (embed limits)](https://discordapp.com/developers/docs/resources/channel#embed-limits) as well as a useful tool for testing embeds ' +
+                '[here](https://leovoel.github.io/embed-visualizer/)',
             definition: [
                 {
+                    type: 'constant',
                     parameters: ['values+'],
                     exampleCode: '{embedbuild;\n  title:hello!;\n  description:I am an example embed;\n  fields.name:Field 1;\n  fields.value:This is the first field!;\n  ' +
                         'fields.name:Field 2;\n  fields.value:This is the next field and is inline!;\n  fields.inline:true\n}',
                     exampleOut: '{"title":"hello!","description":"I am an example embed","fields":[' +
                         '{"name":"Field 1","value":"This is the first field!"},' +
                         '{"name":"Field 2","value":"This is the next field and is inline!","inline":true}]}',
-                    execute: (ctx, args, subtag) => this.buildEmbed(ctx, args.map(arg => arg.value), subtag)
+                    execute: (_, args) => this.buildEmbed(args.map(arg => arg.value))
                 }
             ]
         });
     }
 
-    public buildEmbed(
-        context: BBTagContext,
-        args: string[],
-        subtag: SubtagCall
-    ): string {
+    public buildEmbed(args: string[]): string {
         const embed: EmbedBuildOptions = {};
 
         for (const entry of args) {
@@ -97,7 +93,7 @@ export class EmbedBuildSubag extends BaseSubtag {
                 continue;
             const splitAt = entry.indexOf(':');
             if (splitAt === -1)
-                return this.invalidEmbed('Missing \':\'', context, subtag);
+                throw new InvalidEmbedError('Missing \':\'', entry);
 
             const key = entry.substring(0, splitAt);
             const value = entry.substring(splitAt + 1);
@@ -105,18 +101,20 @@ export class EmbedBuildSubag extends BaseSubtag {
             const embedError = this.setField(embed, key, value);
 
             if (typeof embedError === 'string')
-                return this.invalidEmbed(embedError, context, subtag);
+                throw new InvalidEmbedError(embedError, entry);
         }
 
         if (embed.fields !== undefined) {
-            if (embed.fields.filter(f => typeof f.value !== 'string' || f.value.trim() === '').length > 0)
-                return this.invalidEmbed('Fields missing value', context, subtag);
-            if (embed.fields.filter(f => typeof f.name !== 'string' || f.name.trim() === '').length > 0)
-                return this.invalidEmbed('Field missing name', context, subtag);
+            const noValue = embed.fields.find(f => typeof f.value !== 'string' || f.value.trim() === '');
+            if (noValue !== undefined)
+                throw new InvalidEmbedError('Fields missing value', noValue);
+            const noName = embed.fields.find(f => typeof f.name !== 'string' || f.name.trim() === '');
+            if (noName !== undefined)
+                throw new InvalidEmbedError('Field missing name', noName);
         }
         const embedText = JSON.stringify(embed);
         if (embedText.length > 6000) //? Is this even how discord counts this?
-            return this.invalidEmbed('Embed too long', context, subtag);
+            throw new InvalidEmbedError('Embed too long', embed);
         return embedText;
     }
 
@@ -160,7 +158,7 @@ export class EmbedBuildSubag extends BaseSubtag {
             }
             case 'footer.icon_url':
                 try {
-                    embed.footer = {...embed.footer, icon_url: new URL(value).href};
+                    embed.footer = { ...embed.footer, icon_url: new URL(value).href };
                     break;
                 } catch (e: unknown) {
                     return 'Invalid footer.icon_url';
@@ -168,18 +166,18 @@ export class EmbedBuildSubag extends BaseSubtag {
             case 'footer.text':
                 if (value.length > 2048)
                     return 'Footer text too long';
-                embed.footer = {...embed.footer, text: value};
+                embed.footer = { ...embed.footer, text: value };
                 break;
             case 'thumbnail.url':
                 try {
-                    embed.thumbnail = {...embed.thumbnail, url: new URL(value).href};
+                    embed.thumbnail = { ...embed.thumbnail, url: new URL(value).href };
                     break;
                 } catch (e: unknown) {
                     return 'Invalid thumbnail.url';
                 }
             case 'image.url':
                 try {
-                    embed.image = {...embed.image, url: new URL(value).href};
+                    embed.image = { ...embed.image, url: new URL(value).href };
                     break;
                 } catch (e: unknown) {
                     return 'Invalid image.url';
@@ -187,18 +185,18 @@ export class EmbedBuildSubag extends BaseSubtag {
             case 'author.name':
                 if (value.length > 256)
                     return 'Author name too long';
-                embed.author = {...embed.author, name: value};
+                embed.author = { ...embed.author, name: value };
                 break;
             case 'author.url':
                 try {
-                    embed.author = {...embed.author, url: new URL(value).href};
+                    embed.author = { ...embed.author, url: new URL(value).href };
                     break;
                 } catch (e: unknown) {
                     return 'Invalid author.url';
                 }
             case 'author.icon_url':
                 try {
-                    embed.author = {...embed.author, icon_url: new URL(value).href};
+                    embed.author = { ...embed.author, icon_url: new URL(value).href };
                     break;
                 } catch (e: unknown) {
                     return 'Invalid author.icon_url';

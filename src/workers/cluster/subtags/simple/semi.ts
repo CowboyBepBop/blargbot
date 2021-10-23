@@ -8,6 +8,7 @@ export class SemiSubtag extends BaseSubtag {
             category: SubtagType.SIMPLE,
             definition: [
                 {
+                    type: 'constant',
                     parameters: [],
                     description: 'Returns `;`',
                     exampleCode: 'This is a semicolon! {semi}',

@@ -1,6 +1,6 @@
-import { Statement, SubtagCall } from '@cluster/types';
+import { BBTagAST, BBTagASTCall } from '@cluster/types';
 
-export function stringify(bbtag: Statement | SubtagCall): string {
+export function stringify(bbtag: BBTagAST | BBTagASTCall): string {
     if (Array.isArray(bbtag)) {
         return bbtag.map(val => typeof val === 'string' ? val : stringify(val)).join('');
     }

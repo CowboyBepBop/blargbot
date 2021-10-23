@@ -10,6 +10,7 @@ export class EmojisSubtag extends BaseSubtag {
             desc: 'Please not that Discord will remove all the emojis from a message which contains an emoji that blarg can\'t use. For example, blargbot can\'t use a role-restricted emoji if it doesn\'t have the role. Learn more [here](https://discordapp.com/developers/docs/resources/emoji).',
             definition: [
                 {
+                    type: 'constant',
                     parameters: [],
                     description: 'Returns an array of emojis in the current guild.',
                     exampleCode: 'This guild has {length;{emojis}} emojis.',

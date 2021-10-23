@@ -1,6 +1,7 @@
-import { BaseSubtag, BBTagContext } from '@cluster/bbtag';
-import { SubtagArgumentValue, SubtagCall } from '@cluster/types';
+import { BaseSubtag } from '@cluster/bbtag';
+import { SubtagArgumentValue } from '@cluster/types';
 import { bbtagUtil, parse, SubtagType } from '@cluster/utils';
+import { IterTools } from '@core/utils/iterTools';
 
 export class SwitchSubtag extends BaseSubtag {
     public constructor() {
@@ -9,35 +10,39 @@ export class SwitchSubtag extends BaseSubtag {
             category: SubtagType.COMPLEX,
             definition: [//! Docs overidden
                 {
-                    parameters: ['value', 'default'],
-                    execute: (_, [, {value}]) => value
-                },
-                {
-                    parameters: ['value', 'case', 'then+'],
-                    execute: (ctx, [{value}, ...args], subtag) => this.switch(ctx, subtag, value, ...args)
+                    parameters: ['value', ['case', '~then'], '~default?'],
+                    execute: (_, [value, ...cases]) => {
+                        const evenLength = cases.length - cases.length % 2;
+                        return this.switch(
+                            value.value,
+                            IterTools.from(cases)
+                                .take(evenLength)
+                                .buffer(2)
+                                .map(buf => [buf[0].value, buf[1]]),
+                            cases[evenLength + 1]
+                        );
+                    }
                 }
             ]
         });
     }
 
     public async switch(
-        _context: BBTagContext,
-        _subtag: SubtagCall,
         value: string,
-        ...args: SubtagArgumentValue[]
-    ): Promise<string> {
-        let elseDo: SubtagArgumentValue | undefined;
+        cases: Iterable<[string, SubtagArgumentValue]>,
+        defaultCase?: SubtagArgumentValue
+    ): Promise<string | undefined> {
+        for (const [caseValue, then] of cases) {
+            if (caseValue === value)
+                return then.execute();
 
-        if (args.length % 2 === 1) elseDo = <SubtagArgumentValue>args.pop();
+            const { v: array } = bbtagUtil.tagArray.deserialize(caseValue) ?? {};
+            if (array === undefined)
+                continue;
 
-        for (let i = 0; i < args.length; i += 2) {
-            const caseValue = await args[i].execute();
-            const caseArray = bbtagUtil.tagArray.deserialize(caseValue) ?? {v: undefined};
-            const cases = Array.isArray(caseArray.v) ? caseArray.v : [caseValue];
-            for (const key of cases)
-                if (parse.string(key) === value)
-                    return args[i + 1].execute();
+            if (IterTools.from(array).map(i => parse.string(i)).contains(value))
+                return await then.execute();
         }
-        return elseDo !== undefined ? await elseDo.execute() : '';
+        return defaultCase?.execute();
     }
 }

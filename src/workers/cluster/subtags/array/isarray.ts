@@ -8,11 +8,12 @@ export class IsArraySubtag extends BaseSubtag {
             category: SubtagType.COMPLEX,
             definition: [
                 {
+                    type: 'constant',
                     parameters: ['text'],
                     description: 'Determines whether `text` is a valid array.',
                     exampleCode: '{isarray;["array?"]} {isarray;array?}',
                     exampleOut: 'true false',
-                    execute: (_, [array]) => this.isArray(array.value).toString()
+                    execute: (_, [array]) => this.isArray(array.value)
                 }
             ]
         });

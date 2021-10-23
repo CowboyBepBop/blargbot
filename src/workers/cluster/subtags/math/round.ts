@@ -1,4 +1,4 @@
-import { BaseSubtag } from '@cluster/bbtag';
+import { BaseSubtag, NotANumberError } from '@cluster/bbtag';
 import { parse, SubtagType } from '@cluster/utils';
 
 export class RoundSubtag extends BaseSubtag {
@@ -8,18 +8,21 @@ export class RoundSubtag extends BaseSubtag {
             category: SubtagType.MATH,
             definition: [
                 {
+                    type: 'constant',
                     parameters: ['number'],
                     description: 'Rounds `number` to the nearest whole number.',
                     exampleCode: '{round;1.23}',
                     exampleOut: '1',
-                    execute: (context, [{value: numberStr}], subtag) => {
-                        const number = parse.float(numberStr);
-                        if (isNaN(number))
-                            return this.notANumber(context, subtag);
-                        return Math.round(number).toString();
-                    }
+                    execute: (_, [number]) => this.round(number.value)
                 }
             ]
         });
+    }
+
+    public round(value: string): number {
+        const number = parse.float(value);
+        if (isNaN(number))
+            throw new NotANumberError(value);
+        return Math.round(number);
     }
 }

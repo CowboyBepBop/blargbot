@@ -1,5 +1,4 @@
-import { BaseSubtag, BBTagContext } from '@cluster/bbtag';
-import { SubtagCall } from '@cluster/types';
+import { BaseSubtag, BBTagContext, BBTagRuntimeError } from '@cluster/bbtag';
 import { discordUtil, parse, SubtagType } from '@cluster/utils';
 
 export class RoleSetPermsSubtag extends BaseSubtag {
@@ -14,7 +13,7 @@ export class RoleSetPermsSubtag extends BaseSubtag {
                     description: 'Removes all perms from `role`',
                     exampleCode: '{rolesetperms;Support}',
                     exampleOut: '(perms have been changed)', //TODO meaningful output
-                    execute: (ctx, args, subtag) => this.roleSetPerms(ctx, args[0].value, '0', '', subtag)
+                    execute: (ctx, [role]) => this.roleSetPerms(ctx, role.value, '0', '')
                 },
                 {
                     parameters: ['role', 'permissions:0', 'quiet?'],
@@ -24,7 +23,7 @@ export class RoleSetPermsSubtag extends BaseSubtag {
                         'If `quiet` is specified, if `role` can\'t be found it will simply return nothing',
                     exampleCode: 'The admin role now has the administrator permission. {rolesetperms;admin;8}',
                     exampleOut: 'The admin role now has the administrator permission.',
-                    execute: (ctx, args, subtag) => this.roleSetPerms(ctx, args[0].value, args[1].value, args[2].value, subtag)
+                    execute: (ctx, [role, permissions, quiet]) => this.roleSetPerms(ctx, role.value, permissions.value, quiet.value)
                 }
             ]
         });
@@ -34,15 +33,14 @@ export class RoleSetPermsSubtag extends BaseSubtag {
         context: BBTagContext,
         roleStr: string,
         permsStr: string,
-        quietStr: string,
-        subtag: SubtagCall
-    ): Promise<string | void> {
+        quietStr: string
+    ): Promise<undefined> {
         const topRole = discordUtil.getRoleEditPosition(context);
         if (topRole === 0)
-            return this.customError('Author cannot edit roles', context, subtag);
+            throw new BBTagRuntimeError('Author cannot edit roles');
 
         const quiet = typeof context.scope.quiet === 'boolean' ? context.scope.quiet : quietStr !== '';
-        const role = await context.queryRole(roleStr, {noLookup: quiet, noErrors: context.scope.noLookupErrors });
+        const role = await context.queryRole(roleStr, { noLookup: quiet, noErrors: context.scope.noLookupErrors });
         const perms = parse.int(permsStr);
 
         const allowedPerms = context.permissions.valueOf();
@@ -50,17 +48,17 @@ export class RoleSetPermsSubtag extends BaseSubtag {
 
         if (role !== undefined) {
             if (role.position >= topRole)
-                return this.customError('Role above author', context, subtag);
+                throw new BBTagRuntimeError('Role above author');
 
             try {
                 const fullReason = discordUtil.formatAuditReason(context.user, context.scope.reason);
                 await role.edit({ permissions: mappedPerms }, fullReason);
-                return;
+                return undefined;
             } catch (err: unknown) {
                 if (!quiet)
-                    return this.customError('Failed to edit role: no perms', context, subtag);
+                    throw new BBTagRuntimeError('Failed to edit role: no perms');
             }
         }
-        return this.customError('Role not found', context, subtag); //this.noRoleFound(context, subtag);
+        throw new BBTagRuntimeError('Role not found'); //NoRoleFoundError(context, subtag);
     }
 }

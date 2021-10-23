@@ -8,6 +8,7 @@ export class ParseFloattSubtag extends BaseSubtag {
             category: SubtagType.MATH,
             definition: [
                 {
+                    type: 'constant',
                     parameters: ['number'],
                     description: 'Returns an floating point number from `text`. If it wasn\'t a number, returns `NaN`.',
                     exampleCode: '{parsefloat;abcd} {parsefloat;12.34} {parsefloat;1.2cd}',

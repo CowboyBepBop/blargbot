@@ -8,6 +8,7 @@ export class ZwsSubtag extends BaseSubtag {
             category: SubtagType.SIMPLE,
             definition: [
                 {
+                    type: 'constant',
                     parameters: [],
                     description: 'Returns a single zero width space (unicode 200B)',
                     exampleCode: '{zws}',

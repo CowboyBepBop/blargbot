@@ -12,8 +12,8 @@ export class RandChooseSubtag extends BaseSubtag {
                     description: 'Picks one random entry from `choiceArray`.',
                     exampleCode: 'I feel like eating {randchoose;["pie", "cake", "pudding"]} today',
                     exampleOut: 'I feel like eating pie today',
-                    execute: async (context, [{value: arr}]) => {
-                        const choices = await bbtagUtil.tagArray.getArray(context, arr);
+                    execute: async (context, [{ value: arr }]) => {
+                        const choices = await bbtagUtil.tagArray.resolve(context, arr);
                         if (choices === undefined || !Array.isArray(choices.v))
                             return arr;
                         return parse.string(choices.v[randInt(0, choices.v.length - 1)]);

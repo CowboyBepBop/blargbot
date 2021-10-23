@@ -8,6 +8,7 @@ export class ParseIntSubtag extends BaseSubtag {
             category: SubtagType.MATH,
             definition: [
                 {
+                    type: 'constant',
                     parameters: ['number'],
                     description: 'Returns an integer from `text`. If it wasn\'t a number, returns `NaN`.',
                     exampleCode: '{parseint;abcd} {parseint;1234} {parseint;12cd}',

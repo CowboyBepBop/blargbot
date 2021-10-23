@@ -1,8 +1,5 @@
-import { BaseSubtag } from '@cluster/bbtag';
+import { BaseSubtag, BBTagContext, BBTagRuntimeError } from '@cluster/bbtag';
 import { bbtagUtil, SubtagType } from '@cluster/utils';
-import { ReturnObject } from '@cluster/utils/bbtag/json';
-
-const json = bbtagUtil.json;
 
 export class JsonSetSubtag extends BaseSubtag {
     public constructor() {
@@ -18,33 +15,27 @@ export class JsonSetSubtag extends BaseSubtag {
                         'If `create` is not empty, will create/convert any missing keys.',
                     exampleCode: '{jsonset;;path.to.key;value;create}',
                     exampleOut: '{"path":{"to":{"key":"value"}}}',
-                    execute: async (context, [{value: input}, {value: path}, {value}, {value: createStr}], subtag): Promise<string | void> => {
-                        const create = createStr !== '' ? true : false;
-                        let obj: JArray | JObject | ReturnObject;
-                        try {
-                            let varname: string | undefined;
-                            const arr = await bbtagUtil.tagArray.getArray(context, input);
-                            if (arr !== undefined && Array.isArray(arr.v))
-                                obj = arr.v;
-                            else {
-                                const parsedObject = await json.parse(context, input);
-                                if (parsedObject.variable !== undefined)
-                                    varname = parsedObject.variable;
-                                obj = parsedObject.object;
-                            }
-                            const modifiedObj = json.set(obj, path, value, create);
-                            if (arr?.n !== undefined) {
-                                await context.variables.set(arr.n, obj);
-                            } else if (varname !== undefined) {
-                                await context.variables.set(varname, JSON.stringify(modifiedObj));
-                            } else return JSON.stringify(modifiedObj);
-                        } catch (e: unknown) {
-                            if (e instanceof Error)
-                                return this.customError(e.message, context, subtag);
-                        }
-                    }
+                    execute: (ctx, [input, path, value, create]) => this.setJson(ctx, input.value, path.value, value.value, create.value)
                 }
             ]
         });
+    }
+
+    public async setJson(context: BBTagContext, objectStr: string, path: string, value: string, createStr: string): Promise<JObject | JArray | undefined> {
+        const create = createStr !== '' ? true : false;
+        try {
+            const val = await bbtagUtil.tagArray.resolve(context, objectStr) ?? await bbtagUtil.json.parse(context, objectStr);
+            const { n: varName, v: object } = 'object' in val ? { n: val.variable, v: val.object } : val;
+            const modifiedObj = bbtagUtil.json.set(object, path, value, create);
+
+            if (varName === undefined)
+                return modifiedObj;
+            await context.variables.set(varName, object);
+            return undefined;
+        } catch (e: unknown) {
+            if (e instanceof Error)
+                throw new BBTagRuntimeError(e.message);
+            throw e;
+        }
     }
 }

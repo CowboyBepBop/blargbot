@@ -1,4 +1,4 @@
-import { RuntimeLimit, RuntimeLimitRule, SerializedRuntimeLimit, SubtagCall } from '@cluster/types';
+import { RuntimeLimit, RuntimeLimitRule, SerializedRuntimeLimit } from '@cluster/types';
 
 import { BBTagContext } from '../BBTagContext';
 import { limits } from './index';
@@ -16,11 +16,22 @@ export abstract class BaseRuntimeLimit implements RuntimeLimit {
         this.#name = name;
     }
 
+    public install(context: BBTagContext): void {
+        for (const [rootKey, ruleSet] of Object.entries(this.#rules)) {
+            const subRules = ruleSet?.[''];
+            if (subRules === undefined)
+                continue;
+
+            for (const subRule of subRules)
+                subRule.install(context, rootKey);
+        }
+    }
+
     private getKeys(key: string, useDefault?: true): [rootKey: string, subKey: string]
     private getKeys(key: string, useDefault: false): [rootKey: string, subKey?: string]
     private getKeys(key: string, useDefault = true): [rootKey: string, subKey?: string] {
         const keySplit = key.split(':', 2);
-        return [keySplit[0], keySplit[1] ?? (useDefault ? 'default' : undefined)];
+        return [keySplit[0], keySplit[1] ?? (useDefault ? '' : undefined)];
     }
 
     public addRules(rulekey: string | string[], ...rules: RuntimeLimitRule[]): this {
@@ -34,18 +45,15 @@ export abstract class BaseRuntimeLimit implements RuntimeLimit {
         return this;
     }
 
-    public async check(context: BBTagContext, subtag: SubtagCall, rulekey: string): Promise<string | undefined> {
+    public async check(context: BBTagContext, rulekey: string): Promise<void> {
         const [rootKey, subKey] = this.getKeys(rulekey);
         const set = this.#rules[rootKey] ?? {};
         const collection = set[subKey];
         if (collection === undefined)
             return undefined;
 
-        for (const rule of collection) {
-            if (!await rule.check(context, subtag)) {
-                return context.addError(rule.errorText(rulekey, this.scopeName), subtag);
-            }
-        }
+        for (const rule of collection)
+            await rule.check(context, rootKey);
         return undefined;
     }
 
@@ -61,16 +69,13 @@ export abstract class BaseRuntimeLimit implements RuntimeLimit {
     public serialize(): SerializedRuntimeLimit {
         const result: SerializedRuntimeLimit = { rules: {}, type: this.#name };
 
-        for (const rootKey of Object.keys(this.#rules)) {
-            const ruleSet = this.#rules[rootKey];
+        for (const [rootKey, ruleSet] of Object.entries(this.#rules)) {
             if (ruleSet === undefined)
                 continue;
 
-            for (const subKey of Object.keys(ruleSet)) {
-                const subRules = ruleSet[subKey];
-                if (subRules !== undefined) {
+            for (const [subKey, subRules] of Object.entries(ruleSet)) {
+                if (subRules !== undefined)
                     result.rules[`${rootKey}:${subKey}`] = subRules.map(r => r.state());
-                }
             }
         }
 

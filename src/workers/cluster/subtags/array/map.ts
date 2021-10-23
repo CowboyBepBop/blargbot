@@ -1,5 +1,5 @@
 import { BaseSubtag, BBTagContext } from '@cluster/bbtag';
-import { SubtagArgumentValue, SubtagCall } from '@cluster/types';
+import { SubtagArgumentValue } from '@cluster/types';
 import { bbtagUtil, SubtagType } from '@cluster/utils';
 
 export class MapSubtag extends BaseSubtag {
@@ -16,32 +16,32 @@ export class MapSubtag extends BaseSubtag {
                         ' will be the new value of the element. This will return the new array, and will not modify the original.',
                     exampleCode: '{map;~item;["apples","oranges","pears"];{upper;{get;~item}}}',
                     exampleOut: '["APPLES","ORANGES","PEARS"]',
-                    execute: (context, [varName, array, code], subtag) => this.map(context, varName.value, array.value, code, subtag)
+                    execute: (context, [varName, array, code]) => this.map(context, varName.value, array.value, code)
                 }
             ]
         });
     }
 
-    public async map(context: BBTagContext, varName: string, arrayStr: string, code: SubtagArgumentValue, subtag: SubtagCall): Promise<string> {
-        const { v: array } = await bbtagUtil.tagArray.getArray(context, arrayStr) ?? {};
+    public async map(context: BBTagContext, varName: string, arrayStr: string, code: SubtagArgumentValue): Promise<JArray> {
+        const { v: array } = await bbtagUtil.tagArray.resolve(context, arrayStr) ?? {};
         if (array === undefined || array.length === 0)
-            return '[]';
+            return [];
 
         const result = [];
-        for (const item of array) {
-            const checked = await context.limit.check(context, subtag, 'map:loops');
-            if (checked !== undefined) {
-                result.push(checked);
-                break;
-            }
-            await context.variables.set(varName, item);
-            result.push(await code.execute());
+        try {
+            for (const item of array) {
+                if (context.state.return !== 0)
+                    break;
 
-            if (context.state.return !== 0)
-                break;
+                await context.limit.check(context, 'map:loops');
+                await context.variables.set(varName, item);
+
+                result.push(await code.execute());
+            }
+        } finally {
+            await context.variables.reset(varName);
         }
 
-        await context.variables.reset(varName);
-        return bbtagUtil.tagArray.serialize(result);
+        return result;
     }
 }

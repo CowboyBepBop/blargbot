@@ -9,11 +9,12 @@ export class UnindentSubtag extends BaseSubtag {
             aliases: ['ui'],
             definition: [
                 {
+                    type: 'constant',
                     parameters: ['text', 'level?'],
                     description: 'Unindents text (or code!). If no level is provided, attempts to guess the indentation level past the first line.',
                     exampleCode: '```\n{unindent;\n  hello\n  world\n}\n```',
                     exampleOut: '```\nhello\nworld\n```',
-                    execute: (_, [{value: text}, {value: levelStr}]) => {
+                    execute: (_, [{ value: text }, { value: levelStr }]) => {
                         let level: number | undefined = parse.int(levelStr);
                         if (isNaN(level)) {
                             level = undefined;

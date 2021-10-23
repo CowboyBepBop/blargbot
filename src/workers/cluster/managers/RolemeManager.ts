@@ -1,6 +1,6 @@
 import { Cluster } from '@cluster';
 import { CustomCommandLimit } from '@cluster/bbtag';
-import { ExecutionResult } from '@cluster/types';
+import { BBTagExecutionResult } from '@cluster/types';
 import { GuildRolemeEntry } from '@core/types';
 import { guard } from '@core/utils';
 import { GuildMessage, Message } from 'discord.js';
@@ -39,7 +39,7 @@ export class RolemeManager {
         }
     }
 
-    public async invokeMessage(trigger: GuildMessage, roleme: GuildRolemeEntry): Promise<ExecutionResult> {
+    public async invokeMessage(trigger: GuildMessage, roleme: GuildRolemeEntry): Promise<BBTagExecutionResult> {
         const tag = roleme.output ?? {
             content: 'Your roles have been edited!',
             author: ''

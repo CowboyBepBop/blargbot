@@ -1,5 +1,5 @@
-import { BaseSubtag, BBTagContext } from '@cluster/bbtag';
-import { SubtagCall } from '@cluster/types';
+import { BaseSubtag, BBTagContext, BBTagRuntimeError } from '@cluster/bbtag';
+import { BBTagASTCall } from '@cluster/types';
 import { bbtagUtil, guard, SubtagType } from '@cluster/utils';
 
 export class ApplySubtag extends BaseSubtag {
@@ -15,7 +15,7 @@ export class ApplySubtag extends BaseSubtag {
                         'If `args` is an array, it will get deconstructed to it\'s individual elements.',
                     exampleCode: '{apply;randint;[1,4]}',
                     exampleOut: '3',
-                    execute: (ctx, args, subtag) => this.defaultApply(ctx, args.map(a => a.value), subtag)
+                    execute: (ctx, [subtagName, ...args], subtag) => this.defaultApply(ctx, subtagName.value, args.map(a => a.value), subtag)
                 }
             ]
         });
@@ -23,17 +23,17 @@ export class ApplySubtag extends BaseSubtag {
 
     public async defaultApply(
         context: BBTagContext,
+        subtagName: string,
         args: string[],
-        subtag: SubtagCall
+        subtag: BBTagASTCall
     ): Promise<string> {
-        const subtagClass = context.subtags.get(args[0].toLowerCase());
-        if (subtagClass === undefined)
-            return this.customError('No subtag found', context, subtag);
+        const subtagType = context.subtags.get(subtagName);
+        if (subtagType === undefined)
+            throw new BBTagRuntimeError('No subtag found');
 
-        const subtagArgs = args.slice(1);
         const flattenedArgs: string[][] = [];
 
-        for (const arg of subtagArgs) {
+        for (const arg of args) {
             const arr = bbtagUtil.tagArray.deserialize(arg);
             if (arr !== undefined && Array.isArray(arr.v))
                 flattenedArgs.push(
@@ -45,16 +45,15 @@ export class ApplySubtag extends BaseSubtag {
                 );
             else flattenedArgs.push([arg]);
         }
-        const subtagCall = {
-            name: [subtagClass.name],
-            args: flattenedArgs,
-            start: subtag.start,
-            end: subtag.end,
-            get source(): string {
-                return `{${args.join(';')}}`;
+        const plan = bbtagUtil.buildExecutionPlan(context, [
+            {
+                args: flattenedArgs,
+                end: subtag.end,
+                source: `{${flattenedArgs.join(';')}}`,
+                name: [subtagName],
+                start: subtag.start
             }
-        };
-
-        return await context.engine.eval(subtagCall, context);
+        ]);
+        return await context.eval(plan);
     }
 }

@@ -8,6 +8,7 @@ export class UriDecodeSubtag extends BaseSubtag {
             category: SubtagType.COMPLEX,
             definition: [
                 {
+                    type: 'constant',
                     parameters: ['text'],
                     description: 'Decodes `text` from URI format.',
                     exampleCode: '{uridecode;Hello%20world}',

@@ -8,6 +8,7 @@ export class UriEncodeSubtag extends BaseSubtag {
             category: SubtagType.COMPLEX,
             definition: [
                 {
+                    type: 'constant',
                     parameters: ['text'],
                     description: 'Encodes `text` in URI format. Useful for constructing links.',
                     exampleCode: '{uriencode;Hello world!}',

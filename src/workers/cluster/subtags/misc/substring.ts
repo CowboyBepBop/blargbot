@@ -1,5 +1,6 @@
-import { BaseSubtag } from '@cluster/bbtag';
+import { BaseSubtag, BBTagContext, NotANumberError } from '@cluster/bbtag';
 import { parse, SubtagType } from '@cluster/utils';
+import { Lazy } from '@core/Lazy';
 
 export class SubstringSubtag extends BaseSubtag {
     public constructor() {
@@ -8,30 +9,28 @@ export class SubstringSubtag extends BaseSubtag {
             category: SubtagType.COMPLEX,
             definition: [
                 {
+                    type: 'constant',
                     parameters: ['text', 'start', 'end?'],
                     description: 'Returns all text from `text` between the `start` and `end`. ' +
                         '`end` defaults to the length of text.',
                     exampleCode: 'Hello {substring;world;2;3}!',
                     exampleOut: 'Hello r!',
-                    execute: (context, args, subtag) => {
-                        const fallback = context.scope.fallback !== undefined ? parse.int(context.scope.fallback) : context.scope.fallback;
-                        const text = args[0].value;
-                        let start: number = parse.int(args[1].value);
-                        let end: number = parse.int(args[2].value !== '' ? args[2].value : text.length);
-                        if (fallback !== undefined) {
-                            if (isNaN(start)) start = fallback;
-                            if (isNaN(end)) end = fallback;
-                        }
-
-                        if (isNaN(start))
-                            return this.notANumber(context, subtag, 'start is not a number');
-                        if (isNaN(end))
-                            return this.notANumber(context, subtag, 'end is not a number');
-
-                        return text.substring(start, end);
-                    }
+                    execute: (ctx, [text, start, end]) => this.substring(ctx, text.value, start.value, end.value)
                 }
             ]
         });
+    }
+
+    public substring(context: BBTagContext, text: string, startStr: string, endStr: string): string {
+        const fallback = new Lazy(() => parse.int(context.scope.fallback ?? ''));
+        const start = parse.int(startStr, false) ?? fallback.value;
+        if (isNaN(start))
+            throw new NotANumberError(startStr, 'integer');
+
+        const end = parse.int(endStr === '' ? text.length : endStr, false) ?? fallback.value;
+        if (isNaN(end))
+            throw new NotANumberError(endStr, 'integer');
+
+        return text.substring(start, end);
     }
 }

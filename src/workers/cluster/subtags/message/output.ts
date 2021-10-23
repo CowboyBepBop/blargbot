@@ -1,4 +1,4 @@
-import { BaseSubtag } from '@cluster/bbtag';
+import { BaseSubtag, BBTagContext, BBTagRuntimeError } from '@cluster/bbtag';
 import { SubtagType } from '@cluster/utils';
 
 export class OutputSubtag extends BaseSubtag {
@@ -15,13 +15,16 @@ export class OutputSubtag extends BaseSubtag {
                         '\nThe message id of the output that was sent will be returned.',
                     exampleCode: '{output;Hello!}',
                     exampleOut: 'Hello!',
-                    execute: async (context, [{ value: text }], subtag) => {
-                        if (context.state.outputMessage !== undefined && text.length > 0)
-                            return this.customError('Cannot send multiple outputs', context, subtag);
-                        return await context.sendOutput(text) ?? '';
-                    }
+                    execute: (ctx, [text]) => this.sendOutput(ctx, text.value)
                 }
             ]
         });
+    }
+
+    public async sendOutput(context: BBTagContext, text: string): Promise<string> {
+        if (context.state.outputMessage !== undefined && text.length > 0)
+            throw new BBTagRuntimeError('Cannot send multiple outputs');
+        return await context.sendOutput(text) ?? '';
+
     }
 }

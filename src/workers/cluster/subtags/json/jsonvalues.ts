@@ -1,7 +1,5 @@
-import { BaseSubtag } from '@cluster/bbtag';
+import { BaseSubtag, BBTagContext, BBTagRuntimeError } from '@cluster/bbtag';
 import { bbtagUtil, SubtagType } from '@cluster/utils';
-
-const json = bbtagUtil.json;
 
 export class JsonValuesSubtag extends BaseSubtag {
     public constructor() {
@@ -13,33 +11,34 @@ export class JsonValuesSubtag extends BaseSubtag {
                 {
                     parameters: ['object', 'path?'],
                     description: 'Retrieves all values from provided the JSON object. ' +
-                    '`object` can be a JSON object, array, or string. If a string is provided, a variable with the same name will be used.\n' +
-                    '`path` is a dot-noted series of properties.',
+                        '`object` can be a JSON object, array, or string. If a string is provided, a variable with the same name will be used.\n' +
+                        '`path` is a dot-noted series of properties.',
                     exampleCode: '{set;~json;{json;{"key": "value", "key2" : "value2"}}\n'
-                    + '{jsonvalues;~json}',
+                        + '{jsonvalues;~json}',
                     exampleOut: '["value","value2"]',
-                    execute: async (context, [{value: input}, {value: path}], subtag): Promise<string | void> => {
-                        try {
-                            let obj: JObject | JArray;
-                            const arr = await bbtagUtil.tagArray.getArray(context, input);
-                            if (arr !== undefined && Array.isArray(arr.v))
-                                obj = arr.v;
-                            else
-                                obj = (await json.parse(context, input)).object;
-                            if (path !== '') {
-                                const objAtPath = json.get(obj, path);
-                                if ((typeof objAtPath === 'object' || typeof objAtPath === 'string') && objAtPath !== null)
-                                    return JSON.stringify(Object.values(objAtPath));
-                            }
-                            return JSON.stringify(Object.values(obj));
-
-                        } catch (e: unknown) {
-                            if (e instanceof Error)
-                                return this.customError(e.message, context, subtag);
-                        }
-                    }
+                    execute: (ctx, [object, path]) => this.getJsonValues(ctx, object.value, path.value)
                 }
             ]
         });
+    }
+
+    public async getJsonValues(context: BBTagContext, objectStr: string, path: string): Promise<JArray | undefined> {
+        const { v: object } = await bbtagUtil.tagArray.resolve(context, objectStr)
+            ?? { v: (await bbtagUtil.json.parse(context, objectStr)).object };
+
+        if (path === '')
+            return Object.values(object);
+
+        try {
+            const objAtPath = bbtagUtil.json.get(object, path);
+            if (objAtPath === undefined || objAtPath === null)
+                return undefined;
+
+            return Object.values(objAtPath);
+        } catch (err: unknown) {
+            if (err instanceof Error)
+                throw new BBTagRuntimeError(err.message);
+            throw err;
+        }
     }
 }

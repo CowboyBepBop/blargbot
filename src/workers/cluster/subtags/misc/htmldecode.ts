@@ -9,6 +9,7 @@ export class HtmlDecodeSubtag extends BaseSubtag {
             category: SubtagType.COMPLEX,
             definition: [
                 {
+                    type: 'constant',
                     parameters: ['text+'],
                     description: 'Decodes html entities from `text`.',
                     exampleCode: '{htmldecode;&lt;hello, world&gt;}',

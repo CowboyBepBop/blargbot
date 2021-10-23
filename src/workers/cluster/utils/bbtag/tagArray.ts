@@ -39,7 +39,7 @@ const mapBBArray = mapping.mapJson(
         mapping.mapArray(mapping.mapJToken),
         mapping.mapObject<BBTagArray>({
             n: mapping.mapOptionalString,
-            v: mapping.mapArray(mapping.mapJToken)
+            v: mapping.mapInstanceof<JArray>(Array)
         })
     )
 );
@@ -55,16 +55,18 @@ export function flattenArray(array: JArray): JArray {
     return result;
 }
 
-export async function getArray(context: BBTagContext, arrName: string): Promise<BBTagArray | undefined> {
+export async function resolve(context: BBTagContext, arrName: string): Promise<BBTagArray | undefined> {
     const obj = deserialize(arrName);
     if (obj !== undefined)
         return obj;
-    try {
-        const arr = await context.variables.get(arrName);
-        if (arr !== undefined && Array.isArray(arr))
-            return { v: arr, n: arrName };
-    } catch {
-        // NOOP
-    }
+
+    return await get(context, arrName);
+}
+
+export async function get(context: BBTagContext, arrName: string): Promise<BBTagArray | undefined> {
+    const arr = await context.variables.get(arrName);
+    if (arr !== undefined && Array.isArray(arr))
+        return { v: arr, n: arrName };
+
     return undefined;
 }

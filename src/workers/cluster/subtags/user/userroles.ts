@@ -8,11 +8,12 @@ export class UserRolesSubtag extends BaseSubtag {
             category: SubtagType.USER,
             definition: [
                 {
+                    type: 'constant',
                     parameters: [],
                     description: 'Returns the roles of the executing user.',
                     exampleCode: 'Your roles are {userroles}!',
                     exampleOut: 'Your roles are ["1111111111111111","2222222222222222"]!',
-                    execute: (ctx) => JSON.stringify(ctx.member.roles)
+                    execute: (ctx) => ctx.member.roles.cache.map(r => r.id)
                 },
                 {
                     parameters: ['user', 'quiet?'],

@@ -1,5 +1,4 @@
-import { BaseSubtag, BBTagContext } from '@cluster/bbtag';
-import { SubtagCall } from '@cluster/types';
+import { BaseSubtag, BBTagContext, ChannelNotFoundError } from '@cluster/bbtag';
 import { SubtagType } from '@cluster/utils';
 
 export class ChannelCategorySubtag extends BaseSubtag {
@@ -10,18 +9,19 @@ export class ChannelCategorySubtag extends BaseSubtag {
             category: SubtagType.CHANNEL,
             definition: [
                 {
+                    type: 'constant',
                     parameters: [],
                     description: 'Returns the category ID of the current channel.',
                     exampleCode: '{channelcategory}',
                     exampleOut: '111111111111111',
-                    execute: (ctx) => ctx.channel.id
+                    execute: (ctx) => ctx.channel.parent?.id
                 },
                 {
                     parameters: ['channel', 'quiet?'],
                     description: 'Returns the category ID of the provided `channel`. If the provided `channel` is a category this returns nothing. If it cannot be found returns `No channel found`, or nothing if `quiet` is `true`.',
                     exampleCode: '{channelcategory;cool channel}\n{channelcategory;cool category}',
                     exampleOut: '111111111111111\n(nothing is returned here)',
-                    execute: (ctx, [channel, quiet], subtag) => this.getCategory(ctx, channel.value, quiet.value !== '', subtag)
+                    execute: (ctx, [channel, quiet]) => this.getCategory(ctx, channel.value, quiet.value !== '')
                 }
             ]
         });
@@ -30,13 +30,15 @@ export class ChannelCategorySubtag extends BaseSubtag {
     public async getCategory(
         context: BBTagContext,
         channelStr: string,
-        quiet: boolean,
-        subtag: SubtagCall
-    ): Promise<string> {
+        quiet: boolean
+    ): Promise<string | undefined> {
         quiet ||= context.scope.quiet ?? false;
         const channel = await context.queryChannel(channelStr, { noLookup: quiet });
-        if (channel === undefined)
-            return quiet ? '' : this.channelNotFound(context, subtag, `${channelStr} could not be found`);
-        return channel.parent?.id ?? '';
+        if (channel === undefined) {
+            if (quiet)
+                return undefined;
+            throw new ChannelNotFoundError(channelStr);
+        }
+        return channel.parent?.id;
     }
 }

@@ -9,6 +9,7 @@ export class TagAuthorizerSubtag extends BaseSubtag {
             aliases: ['ccauthorizer'],
             definition: [
                 {
+                    type: 'constant',
                     parameters: [],
                     description: 'Returns the user ID of the tag/cc authorizer',
                     exampleCode: '{username;{tagauthorizer}} authorized this tag!',

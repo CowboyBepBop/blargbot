@@ -9,6 +9,7 @@ export class TagAuthorSubtag extends BaseSubtag {
             aliases: ['ccauthor'],
             definition: [
                 {
+                    type: 'constant',
                     parameters: [],
                     description: 'Returns the user ID of the tag/cc author',
                     exampleCode: 'This tag was created by {username;{tagauthor}}',

@@ -8,6 +8,7 @@ export class LengthSubtag extends BaseSubtag {
             category: SubtagType.COMPLEX,
             definition: [
                 {
+                    type: 'constant',
                     parameters: ['value'],
                     description: 'Gives the amount of characters in `value`, or the number of elements if it is an array.',
                     exampleCode: 'What you said is {length;{args}} chars long.',

@@ -9,6 +9,7 @@ export class UserAvatarSubtag extends BaseSubtag {
             desc: 'If no game is being played, this will return \'nothing\'',
             definition: [
                 {
+                    type: 'constant',
                     parameters: [],
                     description: 'Returns the avatar of the executing user.',
                     exampleCode: 'Your avatar is {useravatar}',

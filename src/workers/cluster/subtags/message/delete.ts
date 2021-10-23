@@ -1,5 +1,4 @@
-import { BaseSubtag, BBTagContext } from '@cluster/bbtag';
-import { SubtagCall } from '@cluster/types';
+import { BaseSubtag, BBTagContext, BBTagRuntimeError, ChannelNotFoundError, NoMessageFoundError } from '@cluster/bbtag';
 import { guard, SubtagType } from '@cluster/utils';
 import { Message } from 'discord.js';
 
@@ -15,21 +14,21 @@ export class DeleteSubtag extends BaseSubtag {
                     description: 'Deletes the message that invoked the command',
                     exampleIn: '{//;The message that triggered this will be deleted} {delete}',
                     exampleOut: '(the message got deleted idk how to do examples for this)',
-                    execute: (ctx, _, subtag) => this.deleteMessage(ctx, ctx.channel.id, ctx.message.id, subtag)
+                    execute: (ctx) => this.deleteMessage(ctx, ctx.channel.id, ctx.message.id)
                 },
                 {
                     parameters: ['messageId'],
                     description: 'Deletes the specified `messageId` from the current channel.',
                     exampleIn: '{//;The message with ID `111111111111111111` will be deleted}\n{delete;111111111111111111}',
                     exampleOut: '(the message `111111111111111111` got deleted idk how to do examples for this)',
-                    execute: (ctx, [{ value: msgId }], subtag) => this.deleteMessage(ctx, ctx.channel.id, msgId, subtag)
+                    execute: (ctx, [messageId]) => this.deleteMessage(ctx, ctx.channel.id, messageId.value)
                 },
                 {
                     parameters: ['channel', 'messageId'],
                     description: 'Deletes the specified `messageId` from channel `channel`.',
                     exampleIn: '{//;The message with ID `2222222222222222` from channel `1111111111111111` will be deleted}\n{delete;111111111111111111;2222222222222222}',
                     exampleOut: '(the message `2222222222222222` from channel `1111111111111111` got deleted)',
-                    execute: (ctx, args, subtag) => this.deleteMessage(ctx, args[0].value, args[1].value, subtag)
+                    execute: (ctx, [channel, messageId]) => this.deleteMessage(ctx, channel.value, messageId.value)
                 }
             ]
         });
@@ -38,22 +37,21 @@ export class DeleteSubtag extends BaseSubtag {
     public async deleteMessage(
         context: BBTagContext,
         channelStr: string,
-        messageId: string,
-        subtag: SubtagCall
-    ): Promise<string | void> {
+        messageId: string
+    ): Promise<undefined> {
         if (!(await context.isStaff || context.ownsMessage(messageId)))
-            return this.customError('Author must be staff to delete unrelated messages', context, subtag);
+            throw new BBTagRuntimeError('Author must be staff to delete unrelated messages');
 
         const channel = await context.queryChannel(channelStr);
         let msg: Message | undefined;
         if (channel === undefined)
-            return this.channelNotFound(context, subtag);
+            throw new ChannelNotFoundError(channelStr);
         if (messageId.length > 0 && guard.isTextableChannel(channel)) {
             msg = await context.util.getMessage(channel.id, messageId);
             if (msg === undefined)
-                return this.noMessageFound(context, subtag);
+                throw new NoMessageFoundError(messageId);
         } else {
-            return this.noMessageFound(context, subtag, 'messageId is empty');
+            throw new NoMessageFoundError(messageId);
         }
 
         /**
@@ -70,5 +68,6 @@ export class DeleteSubtag extends BaseSubtag {
             // NO-OP
         }
         //TODO return something like true/false
+        return undefined;
     }
 }

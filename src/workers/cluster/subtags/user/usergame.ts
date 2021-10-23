@@ -9,6 +9,7 @@ export class UserGameSubtag extends BaseSubtag {
             desc: 'If no game is being played, this will return \'nothing\'',
             definition: [
                 {
+                    type: 'constant',
                     parameters: [],
                     description: 'Returns the game the executing user is playing. ',
                     exampleCode: 'You are playing {usergame}',

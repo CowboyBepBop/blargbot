@@ -40,7 +40,7 @@ export class VariableCache {
         this.#cache = {};
     }
 
-    private async _get(variable: string): Promise<CacheEntry> {
+    private async getEntry(variable: string): Promise<CacheEntry> {
         const forced = variable.startsWith('!');
         if (forced) variable = variable.substr(1);
         const entry = this.#cache[variable];
@@ -60,7 +60,7 @@ export class VariableCache {
     }
 
     public async get(variable: string): Promise<JToken> {
-        const entry = await this._get(variable);
+        const entry = await this.getEntry(variable);
         return entry.value;
     }
 
@@ -72,14 +72,14 @@ export class VariableCache {
 
         const forced = variable.startsWith('!');
         if (forced) variable = variable.substr(1);
-        const entry = await this._get(variable);
+        const entry = await this.getEntry(variable);
         entry.value = value;
         if (forced)
             await this.persist([variable]);
     }
 
     public async reset(variable: string): Promise<void> {
-        const entry = await this._get(variable);
+        const entry = await this.getEntry(variable);
         entry.reset();
     }
 

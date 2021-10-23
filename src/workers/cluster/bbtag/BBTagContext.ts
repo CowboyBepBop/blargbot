@@ -1,20 +1,20 @@
-import { ClusterUtilities } from '@cluster';
-import { BBTagContextMessage, BBTagContextOptions, BBTagContextState, BBTagRuntimeScope, FindEntityOptions, FlagDefinition, FlagResult, RuntimeDebugEntry, RuntimeError, RuntimeLimit, RuntimeReturnState, SerializedBBTagContext, Statement, SubtagCall, SubtagHandler } from '@cluster/types';
+import { Cluster, ClusterUtilities } from '@cluster';
+import { BBTagASTCall, BBTagContextMessage, BBTagContextOptions, BBTagContextState, BBTagExecutionPlan, BBTagRuntimeScope, DebugMessage, FindEntityOptions, FlagDefinition, FlagResult, RuntimeDebugEntry, RuntimeLimit, RuntimeReturnState, SerializedBBTagContext } from '@cluster/types';
 import { bbtagUtil, guard, humanize, parse } from '@cluster/utils';
 import { Database } from '@core/database';
 import { Logger } from '@core/Logger';
-import { ModuleLoader } from '@core/modules';
 import { Timer } from '@core/Timer';
 import { ChoiceQueryResult, EntityPickQueryOptions, NamedGuildCommandTag, StoredTag } from '@core/types';
 import { Base, Client as Discord, Collection, Guild, GuildChannels, GuildMember, GuildTextBasedChannels, MessageAttachment, MessageEmbed, MessageEmbedOptions, Permissions, Role, User } from 'discord.js';
 import { Duration } from 'moment-timezone';
 import ReadWriteLock from 'rwlock';
 
-import { BaseSubtag } from './BaseSubtag';
-import { BBTagEngine } from './BBTagEngine';
 import { CacheEntry, VariableCache } from './Caching';
+import { createErrorCompiler } from './compilation';
+import { BBTagRuntimeError } from './errors';
 import { limits } from './limits';
 import { ScopeCollection } from './ScopeCollection';
+import { SubtagProvider } from './SubtagProvider';
 import { TagCooldownManager } from './TagCooldownManager';
 
 function serializeEntity(entity: { id: string; }): { id: string; serialized: string; } {
@@ -44,7 +44,8 @@ export class BBTagContext implements Required<BBTagContextOptions> {
     public readonly execTimer: Timer;
     public readonly dbTimer: Timer;
     public readonly flaggedInput: FlagResult;
-    public readonly errors: RuntimeError[];
+    public readonly errors: DebugMessage[];
+    public readonly warnings: DebugMessage[];
     public readonly debug: RuntimeDebugEntry[];
     public readonly scopes: ScopeCollection;
     public readonly variables: VariableCache;
@@ -57,18 +58,19 @@ export class BBTagContext implements Required<BBTagContextOptions> {
     public get guild(): Guild { return this.message.channel.guild; }
     public get user(): User { return this.message.author; }
     public get scope(): BBTagRuntimeScope { return this.scopes.local; }
-    public get isStaff(): Promise<boolean> { return this.#isStaffPromise ??= this.engine.util.isUserStaff(this.authorizer, this.guild.id); }
-    public get database(): Database { return this.engine.database; }
-    public get logger(): Logger { return this.engine.logger; }
+    public get isStaff(): Promise<boolean> { return this.#isStaffPromise ??= this.cluster.util.isUserStaff(this.authorizer, this.guild.id); }
+    public get database(): Database { return this.cluster.database; }
+    public get logger(): Logger { return this.cluster.logger; }
     public get permissions(): Permissions { return (this.guild.members.cache.get(this.authorizer) ?? { permissions: new Permissions(undefined) }).permissions; }
-    public get util(): ClusterUtilities { return this.engine.util; }
-    public get discord(): Discord<true> { return this.engine.discord; }
-    public get subtags(): ModuleLoader<BaseSubtag> { return this.engine.subtags; }
+    public get util(): ClusterUtilities { return this.cluster.util; }
+    public get discord(): Discord<true> { return this.cluster.discord; }
+    public readonly subtags: SubtagProvider;
 
     public constructor(
-        public readonly engine: BBTagEngine,
+        public readonly cluster: Cluster,
         options: BBTagContextOptions
     ) {
+        this.subtags = new SubtagProvider(cluster.subtags);
         this.message = options.message;
         this.inputRaw = options.inputRaw;
         this.input = humanize.smartSplit(options.inputRaw);
@@ -82,11 +84,12 @@ export class BBTagContext implements Required<BBTagContextOptions> {
         this.cooldown = options.cooldown ?? 0;
         this.cooldowns = options.cooldowns ?? new TagCooldownManager();
         this.locks = options.locks ?? {};
-        this.limit = options.limit;
+        this.limit = typeof options.limit === 'string' ? new limits[options.limit]() : options.limit;
         // this.outputModify = options.outputModify ?? ((_, r) => r);
         this.silent = options.silent ?? false;
         this.flaggedInput = parse.flags(this.flags, this.inputRaw);
         this.errors = [];
+        this.warnings = [];
         this.debug = [];
         this.scopes = options.scopes ?? new ScopeCollection();
         this.variables = options.variables ?? new VariableCache(this);
@@ -112,7 +115,6 @@ export class BBTagContext implements Required<BBTagContextOptions> {
             break: 0,
             continue: 0,
             subtags: {},
-            overrides: {},
             cache: {},
             subtagCount: 0,
             allowedMentions: {
@@ -122,28 +124,41 @@ export class BBTagContext implements Required<BBTagContextOptions> {
             },
             ...options.state ?? {}
         };
+
+        this.limit.install(this);
     }
 
-    public async eval(bbtag: Statement): Promise<string> {
-        return await this.engine.eval(bbtag, this);
+    public async execute(code: string, options: Partial<BBTagContextOptions> = {}): Promise<string> {
+        const context = this.makeChild(options);
+        const result = await this.cluster.bbtag.execute(code, context);
+        this.errors.push(...context.errors);
+        return result.content;
+    }
+
+    public async eval(plan: BBTagExecutionPlan): Promise<string> {
+        return await bbtagUtil.execute(this, plan);
     }
 
     public ownsMessage(messageId: string): boolean {
         return messageId === this.message.id || this.state.ownedMsgs.includes(messageId);
     }
 
+    public disableSubtag(childName: string, parentName: string): { reset(): void; } {
+        return this.subtags.set(childName, createErrorCompiler((_, name) => new BBTagRuntimeError(`Subtag {${name}} is disabled inside {${parentName}}`)));
+    }
+
     public makeChild(options: Partial<BBTagContextOptions> = {}): BBTagContext {
-        return new BBTagContext(this.engine, {
+        return new BBTagContext(this.cluster, {
             ...this,
             ...options
         });
     }
 
-    public addError(error: string, subtag?: SubtagCall, debugMessage?: string): string {
+    public addError(error: string, subtag?: BBTagASTCall, debugMessage?: string): string {
         this.errors.push({
             subtag: subtag,
-            error: `${bbtagUtil.stringify(subtag?.name ?? ['UNKNOWN SUBTAG'])}: ${error}`,
-            debugMessage: debugMessage
+            message: subtag === undefined ? error : `${bbtagUtil.stringify(subtag.name)}: ${error}`,
+            details: debugMessage
         });
         return this.scope.fallback ?? `\`${error}\``;
     }
@@ -222,27 +237,6 @@ export class BBTagContext implements Required<BBTagContextOptions> {
         }
     }
 
-    public override(subtag: string, handler: SubtagHandler): { previous?: SubtagHandler; revert: () => void; } {
-        const overrides = this.state.overrides;
-        if (!guard.hasProperty(overrides, subtag)) {
-            overrides[subtag] = handler;
-            return {
-                revert() {
-                    delete overrides[subtag];
-                }
-            };
-        }
-
-        const previous = overrides[subtag];
-        overrides[subtag] = handler;
-        return {
-            previous,
-            revert() {
-                overrides[subtag] = previous;
-            }
-        };
-    }
-
     public getLock(key: string): ReadWriteLock {
         return this.locks[key] ??= new ReadWriteLock();
     }
@@ -250,13 +244,13 @@ export class BBTagContext implements Required<BBTagContextOptions> {
     private async _sendOutput(text: string): Promise<string | undefined> {
         let disableEveryone = true;
         if (this.isCC) {
-            disableEveryone = await this.engine.database.guilds.getSetting(this.guild.id, 'disableeveryone') ?? false;
+            disableEveryone = await this.cluster.database.guilds.getSetting(this.guild.id, 'disableeveryone') ?? false;
             disableEveryone ||= !this.state.allowedMentions.everybody;
 
-            this.engine.logger.log('Allowed mentions:', this.state.allowedMentions, disableEveryone);
+            this.cluster.logger.log('Allowed mentions:', this.state.allowedMentions, disableEveryone);
         }
         try {
-            const response = await this.engine.util.send(this.message,
+            const response = await this.cluster.util.send(this.message,
                 {
                     content: text,
                     replyToExecuting: true,
@@ -306,20 +300,20 @@ export class BBTagContext implements Required<BBTagContextOptions> {
         return this.state.cache[key] = null;
     }
 
-    public static async deserialize(engine: BBTagEngine, obj: SerializedBBTagContext): Promise<BBTagContext> {
+    public static async deserialize(cluster: Cluster, obj: SerializedBBTagContext): Promise<BBTagContext> {
         let message: BBTagContextMessage | undefined;
         try {
-            const msg = await engine.util.getMessage(obj.msg.channel.id, obj.msg.id);
+            const msg = await cluster.util.getMessage(obj.msg.channel.id, obj.msg.id);
             if (msg === undefined || !guard.isGuildMessage(msg))
                 throw new Error('Channel must be a guild channel to work with BBTag');
             message = msg;
         } catch (err: unknown) {
-            const channel = await engine.util.getChannel(obj.msg.channel.id);
+            const channel = await cluster.util.getChannel(obj.msg.channel.id);
             if (channel === undefined || !guard.isGuildChannel(channel))
                 throw new Error('Channel must be a guild channel to work with BBTag');
             if (!guard.isTextableChannel(channel))
                 throw new Error('Channel must be able to send and receive messages to work with BBTag');
-            const member = await engine.util.getMember(channel.guild.id, obj.msg.member.id);
+            const member = await cluster.util.getMember(channel.guild.id, obj.msg.member.id);
             if (member === undefined)
                 throw new Error(`User ${obj.msg.member.id} doesnt exist on ${channel.guild.id} any more`);
 
@@ -336,7 +330,7 @@ export class BBTagContext implements Required<BBTagContextOptions> {
         }
         const limit = new limits[obj.limit.type]();
         limit.load(obj.limit);
-        const result = new BBTagContext(engine, {
+        const result = new BBTagContext(cluster, {
             inputRaw: obj.inputRaw,
             message: message,
             isCC: obj.isCC,
@@ -352,7 +346,6 @@ export class BBTagContext implements Required<BBTagContextOptions> {
         Object.assign(result.scopes.local, obj.scope);
 
         result.state.cache = {};
-        result.state.overrides = {};
 
         for (const key of Object.keys(obj.tempVars))
             await result.variables.set(key, new CacheEntry(result, key, obj.tempVars[key]));

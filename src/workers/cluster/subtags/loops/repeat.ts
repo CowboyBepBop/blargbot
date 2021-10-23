@@ -1,5 +1,7 @@
-import { BaseSubtag } from '@cluster/bbtag';
+import { BaseSubtag, BBTagContext, BBTagRuntimeError, NotANumberError } from '@cluster/bbtag';
+import { SubtagArgumentValue } from '@cluster/types';
 import { parse, SubtagType } from '@cluster/utils';
+import { Lazy } from '@core/Lazy';
 
 export class RepeatSubtag extends BaseSubtag {
     public constructor() {
@@ -9,36 +11,29 @@ export class RepeatSubtag extends BaseSubtag {
             aliases: ['loop'],
             definition: [
                 {
-                    parameters: ['code', 'amount'],
+                    parameters: ['~code', 'amount'],
                     description: 'Repeatedly executes `code` `amount` times.',
                     exampleCode: '{repeat;e;10}',
                     exampleOut: 'eeeeeeeeee',
-                    execute: async (context, args, subtag) => {
-                        const fallback = parse.int(context.scope.fallback !== undefined ? context.scope.fallback : '');
-                        let amount = parse.int(args[1].value);
-                        let result = '';
-
-                        if (isNaN(amount)) {
-                            if (isNaN(fallback))
-                                return this.notANumber(context, subtag, context.scope.fallback === undefined ? 'amount is not a number' : 'amount and fallback are not numbers');
-                            amount = fallback;
-                        }
-
-                        if (amount < 0) return this.customError('Can\'t be negative', context, subtag);
-
-                        for (let i = 0; i < amount; i++) {
-                            if (await context.limit.check(context, subtag, 'repeat:loops') !== undefined) {
-                                result += this.tooManyLoops(context, subtag);
-                                break;
-                            }
-                            result += await args[0].execute();
-                            if (context.state.return !== 0)
-                                break;
-                        }
-                        return result;
-                    }
+                    execute: (ctx, [code, amount]) => this.repeat(ctx, code, amount.value)
                 }
             ]
         });
+    }
+
+    public async * repeat(context: BBTagContext, code: SubtagArgumentValue, amountStr: string): AsyncGenerator<string> {
+        const fallback = new Lazy(() => parse.int(context.scope.fallback ?? ''));
+        const amount = parse.int(amountStr, false) ?? fallback.value;
+
+        if (isNaN(amount))
+            throw new NotANumberError(amountStr);
+
+        if (amount < 0)
+            throw new BBTagRuntimeError('Can\'t be negative');
+
+        for (let i = 0; i < amount; i++) {
+            await context.limit.check(context, 'repeat:loops');
+            yield await code.execute();
+        }
     }
 }

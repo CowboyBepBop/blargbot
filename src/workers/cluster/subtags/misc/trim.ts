@@ -8,6 +8,7 @@ export class TrimSubtag extends BaseSubtag {
             category: SubtagType.COMPLEX,
             definition: [
                 {
+                    type: 'constant',
                     parameters: ['text'],
                     description: 'Trims whitespace and newlines before and after `text`.',
                     exampleCode: 'Hello {trim;{space;10}beautiful{space;10}} World',

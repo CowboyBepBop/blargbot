@@ -82,21 +82,16 @@ export type CommandManagerTypeMap = {
 
 export type CommandManagers = { [P in keyof CommandManagerTypeMap]: ICommandManager<CommandManagerTypeMap[P]> }
 
-export type Statement = ReadonlyArray<string | SubtagCall>;
+export type BBTagAST = ReadonlyArray<string | BBTagASTCall>;
 
-export interface AnalysisResults {
-    readonly errors: AnalysisResult[];
-    readonly warnings: AnalysisResult[];
+export interface BBTagInvocation extends BBTagASTCall {
+    readonly execute: () => Awaitable<SubtagResult>;
 }
+export type BBTagExecutionPlan = ReadonlyArray<string | BBTagInvocation>;
 
-export interface AnalysisResult {
-    readonly location: SourceMarker;
-    readonly message: string;
-}
-
-export interface SubtagCall {
-    readonly name: Statement;
-    readonly args: readonly Statement[];
+export interface BBTagASTCall {
+    readonly name: BBTagAST;
+    readonly args: readonly BBTagAST[];
     readonly start: SourceMarker;
     readonly end: SourceMarker;
     readonly source: string;
@@ -191,7 +186,6 @@ export interface BBTagContextState {
     break: number;
     continue: number;
     subtags: Record<string, number[] | undefined>;
-    overrides: Record<string, SubtagHandler | undefined>;
     cache: Record<string, NamedGuildCommandTag | StoredTag | null>;
     subtagCount: number;
     allowedMentions: {
@@ -202,21 +196,21 @@ export interface BBTagContextState {
 
 }
 
-export interface RuntimeError {
-    readonly subtag: SubtagCall | undefined;
-    readonly error: string | readonly RuntimeError[];
-    readonly debugMessage: string | undefined;
+export interface DebugMessage {
+    readonly subtag: BBTagASTCall | undefined;
+    readonly message: string;
+    readonly details?: string;
 }
 
 export interface RuntimeDebugEntry {
-    subtag: SubtagCall;
+    subtag: BBTagASTCall;
     text: string;
 }
 
 export interface RuntimeLimit {
-    addRules(rulekey: string | string[], ...rules: RuntimeLimitRule[]): this;
     readonly scopeName: string;
-    check(context: BBTagContext, subtag: SubtagCall, subtagName: string): Promise<string | undefined> | string | undefined;
+    check(context: BBTagContext, subtagName: string): Promise<void> | void;
+    install(context: BBTagContext): void;
     rulesFor(subtagName: string): string[];
     serialize(): SerializedRuntimeLimit;
     load(state: SerializedRuntimeLimit): void;
@@ -231,29 +225,29 @@ export const enum RuntimeReturnState {
 export interface BBTagContextOptions {
     readonly message: BBTagContextMessage;
     readonly inputRaw: string;
-    readonly flags?: readonly FlagDefinition[];
-    readonly isCC: boolean;
-    readonly tagVars?: boolean;
     readonly author: string;
+    readonly isCC: boolean;
+    readonly limit: RuntimeLimit | keyof (typeof import('./bbtag/limits'))['limits'];
+    readonly flags?: readonly FlagDefinition[];
+    readonly tagVars?: boolean;
     readonly authorizer?: string;
     readonly rootTagName?: string;
     readonly tagName?: string;
     readonly cooldown?: number;
     readonly cooldowns?: TagCooldownManager;
     readonly locks?: Record<string, ReadWriteLock | undefined>;
-    readonly limit: RuntimeLimit;
     readonly silent?: boolean;
     readonly state?: Partial<BBTagContextState>;
     readonly scopes?: ScopeCollection;
     readonly variables?: VariableCache;
 }
 
-export interface ExecutionResult {
+export interface BBTagExecutionResult {
     source: string;
     tagName: string;
     input: string;
     content: string;
-    errors: RuntimeError[];
+    errors: DebugMessage[];
     debug: RuntimeDebugEntry[];
     duration: {
         total: number;
@@ -266,45 +260,92 @@ export interface ExecutionResult {
         values: Record<string, JToken>;
     };
 }
+
+export interface ConstantSubtagResult {
+    readonly type: 'constant';
+    readonly value: SubtagConstantResult;
+}
+
 export type SubtagResult =
-    | string
-    | undefined
-    | void;
+    | SubtagConstantResult
+    | Iterable<JToken>
+    | AsyncIterable<JToken>;
 
-export interface SubtagHandlerCallSignature extends SubtagSignatureDetails {
-    readonly execute: (this: unknown, context: BBTagContext, args: SubtagArgumentValueArray, subtagCall: SubtagCall) => Promise<SubtagResult> | SubtagResult;
+export type SubtagConstantResult =
+    | JToken
+    | BBTagArray
+
+export type SubtagHandlerCallSignature =
+    | SubtagConstantCallSignature
+    | SubtagExecutableCallSignature
+
+export interface SubtagConstantCallSignature extends SubtagSignatureDetails {
+    readonly type: 'constant';
+    readonly execute: (this: unknown, context: BBTagContext, args: SubtagArgumentValueArray, subtagCall: BBTagASTCall) => SubtagConstantResult;
 }
 
-export interface SubtagHandler {
-    readonly execute: (this: unknown, context: BBTagContext, subtagName: string, call: SubtagCall) => Promise<SubtagResult> | SubtagResult;
+export interface SubtagExecutableCallSignature extends SubtagSignatureDetails {
+    readonly type: 'executable';
+    readonly execute: (this: unknown, context: BBTagContext, args: SubtagArgumentValueArray, subtagCall: BBTagASTCall) => Awaitable<SubtagResult>;
 }
 
-export interface SubtagHandlerParameter {
-    readonly name: string | undefined;
-    readonly required: boolean;
-    readonly greedy: number | false;
+export interface SubtagCompiler {
+    readonly compile: (this: unknown, context: BBTagContext, subtagName: string, call: BBTagASTCall) => SubtagCompilerResult;
+}
+
+export type SubtagCompilerResult =
+    | SubtagConstantResult
+    | (() => Awaitable<SubtagResult>);
+
+export interface BBTagCompileResult {
+    readonly source: string;
+    readonly parsed: BBTagAST;
+    readonly parseDuration: Duration;
+    readonly executionPlan: BBTagExecutionPlan;
+    readonly executionPlanDuration: Duration;
+    readonly warnings: readonly DebugMessage[];
+    readonly errors: readonly DebugMessage[];
+    execute(caller?: BBTagASTCall): Promise<BBTagExecutionResult>;
+}
+
+export interface SubtagParameterGroup {
+    readonly minCount: number;
+    readonly maxCount: number;
+    readonly values: readonly SubtagParameter[];
+}
+
+export interface SubtagParameter {
+    readonly name: string;
     readonly autoResolve: boolean;
-    readonly defaultValue: string;
-    readonly nested: readonly SubtagHandlerParameter[];
     readonly maxLength: number;
+    readonly defaultValue: string;
 }
 
-export interface SubtagSignatureDetails<TArgs = SubtagHandlerParameter> {
-    readonly parameters: readonly TArgs[];
+export interface SubtagSignatureDetails<TArg = SubtagParameterGroup> {
+    readonly parameters: readonly TArg[];
     readonly description?: string;
     readonly exampleCode?: string;
     readonly exampleIn?: string;
     readonly exampleOut?: string;
 }
 
-export interface SubtagHandlerDefinition extends SubtagSignatureDetails<string | SubtagHandlerDefinitionParameterGroup> {
-    readonly execute: (this: unknown, context: BBTagContext, args: SubtagArgumentValueArray, subtagCall: SubtagCall) => Promise<SubtagResult> | SubtagResult;
+export type SubtagHandlerDefinition =
+    | ConstantSubtagHandlerDefinition
+    | ExecutableSubtagHandlerDefiniton
+
+export interface ConstantSubtagHandlerDefinition extends SubtagSignatureDetails<string | string[] | SubtagHandlerDefinitionParameterGroup> {
+    readonly type: 'constant';
+    readonly execute: (this: unknown, context: BBTagContext, args: SubtagArgumentValueArray, subtagCall: BBTagASTCall) => SubtagConstantResult;
+}
+export interface ExecutableSubtagHandlerDefiniton extends SubtagSignatureDetails<string | string[] | SubtagHandlerDefinitionParameterGroup> {
+    readonly type?: 'executable';
+    readonly execute: (this: unknown, context: BBTagContext, args: SubtagArgumentValueArray, subtagCall: BBTagASTCall) => Awaitable<SubtagResult>;
 }
 
 export interface SubtagHandlerDefinitionParameterGroup {
-    readonly name?: string;
-    readonly type?: 'optional' | 'required' | `${number}OrMore`;
-    readonly parameters: ReadonlyArray<string | SubtagHandlerDefinitionParameterGroup>;
+    readonly minCount?: number;
+    readonly maxCount?: number;
+    readonly parameters: readonly string[];
 }
 
 export interface FlagDefinition {
@@ -538,7 +579,7 @@ export interface CommandListResult {
 export interface SubtagArgumentValue {
     readonly isCached: boolean;
     readonly value: string;
-    readonly code: Statement;
+    readonly code: BBTagExecutionPlan;
     readonly raw: string;
     wait(): Promise<string>;
     execute(): Promise<string>;
@@ -548,32 +589,6 @@ export interface SubtagArgumentValueArray extends ReadonlyArray<SubtagArgumentVa
     readonly subtagName: string;
 }
 
-export type SubHandler = (context: BBTagContext, subtagName: string, call: SubtagCall) => Promise<SubtagResult>;
-export type ArgumentResolver = (context: BBTagContext, subtagName: string, call: SubtagCall) => AsyncGenerator<SubtagArgumentValue>;
-
-export interface SubHandlerCollection {
-    byNumber: { [argLength: number]: SubHandler | undefined; };
-    byTest: Array<{
-        execute: SubHandler;
-        test: (argCount: number) => boolean;
-    }>;
-}
-
-export interface ArgumentResolvers {
-    byNumber: { [argLength: number]: ArgumentResolver; };
-    byTest: Array<{
-        resolver: ArgumentResolver;
-        test: (argCount: number) => boolean; minArgCount: number; maxArgCount: number;
-    }>;
-}
-
-export interface ArgumentResolverPermutations {
-    greedy: SubtagHandlerParameter[];
-    permutations: Array<{
-        beforeGreedy: SubtagHandlerParameter[];
-        afterGreedy: SubtagHandlerParameter[];
-    }>;
-}
 export interface ClusterStats {
     readonly id: number;
     readonly time: number;
@@ -636,11 +651,18 @@ export interface SubtagOptions {
 }
 
 export interface RuntimeLimitRule {
-    check(context: BBTagContext, subtag: SubtagCall): Promise<boolean> | boolean;
-    errorText(subtagName: string, scopeName: string): string;
+    install(context: BBTagContext, subtagName: string): void;
+    check(context: BBTagContext, subtagName: string): Promise<void> | void;
     displayText(subtagName: string, scopeName: string): string;
     state(): JToken;
     load(state: JToken): void;
+}
+
+export interface RuntimeLimitRuleContext {
+    readonly context: BBTagContext;
+    readonly subtagName: string;
+    readonly ast: BBTagASTCall;
+    readonly scopeName: string;
 }
 
 export type GuildCommandContext<TChannel extends GuildTextBasedChannels = GuildTextBasedChannels> = CommandContext<TChannel> & { message: { member: GuildMember; guildID: string; }; };

@@ -244,6 +244,7 @@ export interface Suggestion {
 export interface MessageFilter {
     readonly term: string;
     readonly regex: boolean;
+    readonly decancer?: boolean;
 }
 
 export interface StoredVar<T extends string> {
@@ -956,7 +957,7 @@ export interface SuggestionsTable {
 
 export type TypeMappingResult<T> = { valid: false; } | { valid: true; value: T; };
 export type TypeMapping<T, TArgs extends unknown[] = []> = (value: unknown, ...args: TArgs) => TypeMappingResult<T>;
-export type TypeMappings<T> = { readonly [P in keyof T]-?: TypeMapping<T[P]> | [string, TypeMapping<T[P]>] | [T[P]] };
+export type TypeMappings<T> = { readonly [P in keyof T]-?: TypeMapping<T[P]> | [PropertyKey, TypeMapping<T[P]>] | [T[P]] };
 export interface TypeMappingOptions<T, R> {
     initial?: () => T;
     ifNull?: TypeMappingResult<T | R>;
@@ -966,10 +967,14 @@ export interface TypeMappingOptions<T, R> {
 
 export interface IMiddleware<Context, Result = void> {
     readonly name?: string;
-    execute(context: Context, next: () => Awaitable<Result>, options: MiddlewareRunOptions): Awaitable<Result>;
+    readonly execute: (context: Context, next: NextMiddleware<Result>) => Awaitable<Result>;
 }
 
-export interface MiddlewareRunOptions {
+export interface NextMiddleware<Result> extends MiddlewareOptions {
+    (): Awaitable<Result>;
+}
+
+export interface MiddlewareOptions {
     readonly id: Snowflake;
     readonly logger: Logger;
     readonly start: number;

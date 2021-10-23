@@ -1,25 +1,21 @@
-import { RuntimeReturnState, Statement, SubtagArgumentValue, SubtagCall } from '@cluster/types';
+import { BBTagASTCall, BBTagExecutionPlan, RuntimeReturnState, SubtagArgumentValue } from '@cluster/types';
 import { MessageEmbedOptions } from 'discord.js';
 
+import { ArgLengthExceededError } from '..';
 import { BBTagContext } from '../BBTagContext';
-import { BBTagError } from '../BBTagError';
 
 export class ExecutingSubtagArgumentValue implements SubtagArgumentValue {
-    // eslint-disable-next-line @typescript-eslint/explicit-member-accessibility
+    /* eslint-disable @typescript-eslint/explicit-member-accessibility */
     #promise?: Promise<string>;
-    // eslint-disable-next-line @typescript-eslint/explicit-member-accessibility
     #value?: string;
-    // eslint-disable-next-line @typescript-eslint/explicit-member-accessibility
     readonly #defaultValue: string;
-    // eslint-disable-next-line @typescript-eslint/explicit-member-accessibility
     readonly #context: BBTagContext;
-    // eslint-disable-next-line @typescript-eslint/explicit-member-accessibility
     readonly #maxLength: number;
-    // eslint-disable-next-line @typescript-eslint/explicit-member-accessibility
     readonly #subtagName: string;
+    /* eslint-enable @typescript-eslint/explicit-member-accessibility */
 
-    public readonly code: Statement;
-    public readonly call: SubtagCall;
+    public readonly code: BBTagExecutionPlan;
+    public readonly call: BBTagASTCall;
     public get isCached(): boolean { return this.#value !== undefined; }
     public get raw(): string { return this.code.map(c => typeof c === 'string' ? c : c.source).join(''); }
     public get value(): string {
@@ -31,8 +27,8 @@ export class ExecutingSubtagArgumentValue implements SubtagArgumentValue {
     public constructor(
         context: BBTagContext,
         subtagName: string,
-        call: SubtagCall,
-        code: Statement,
+        call: BBTagASTCall,
+        code: BBTagExecutionPlan,
         defaultValue: string,
         maxLength: number
     ) {
@@ -55,7 +51,7 @@ export class ExecutingSubtagArgumentValue implements SubtagArgumentValue {
     private async executeInner(): Promise<string> {
         const result = await this.#context.eval(this.code);
         if (result.length > this.#maxLength) {
-            await this.#context.util.send(this.#context.engine.cluster.config.discord.channels.errorlog, {
+            await this.#context.util.send(this.#context.cluster.config.discord.channels.errorlog, {
                 embeds: [
                     {
                         title: `ERROR: SubTag arg > ${this.#maxLength}`,
@@ -65,15 +61,11 @@ export class ExecutingSubtagArgumentValue implements SubtagArgumentValue {
                 ]
             });
             this.#context.state.return = RuntimeReturnState.ALL;
-            throw new BBTagError(this.call.start, this.#context.addError(
-                'Argument length exceeded limit',
-                this.call,
-                `Argument ${this.call.args.indexOf(this.code)} is limited to ${this.#maxLength} but got a value of length ${result.length}`
-            ));
+            throw new ArgLengthExceededError(this.#maxLength, this.call.args.indexOf(this.code), result.length);
         }
 
         if (result.length > this.#maxLength / 2) {
-            await this.#context.util.send(this.#context.engine.cluster.config.discord.channels.errorlog, {
+            await this.#context.util.send(this.#context.cluster.config.discord.channels.errorlog, {
                 embeds: [
                     {
                         title: `WARN: SubTag arg length > ${this.#maxLength}`,
@@ -87,7 +79,7 @@ export class ExecutingSubtagArgumentValue implements SubtagArgumentValue {
     }
 }
 
-function buildLengthEmbed(context: BBTagContext, subtag: SubtagCall, subtagName: string): MessageEmbedOptions {
+function buildLengthEmbed(context: BBTagContext, subtag: BBTagASTCall, subtagName: string): MessageEmbedOptions {
     return {
         fields: [
             { name: 'Details', value: `Guild: ${context.guild.id}\nChannel: ${context.channel.id}\nAuthor: <@${context.author}>\nUser: <@${context.user.id}>`, inline: true },

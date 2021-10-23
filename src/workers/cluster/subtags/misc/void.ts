@@ -9,6 +9,7 @@ export class VoidSubtag extends BaseSubtag {
             aliases: ['null'],
             definition: [
                 {
+                    type: 'constant',
                     parameters: ['code?'],
                     description: 'Executes `code` but does not return the output from it. Useful for silent functionality',
                     exampleCode: '{void;This won\'t be output!}',

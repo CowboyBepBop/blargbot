@@ -1,6 +1,6 @@
-import { BaseSubtag, BBTagContext } from '@cluster/bbtag';
-import { SubtagCall } from '@cluster/types';
+import { BaseSubtag, BBTagContext, NotANumberError } from '@cluster/bbtag';
 import { parse, SubtagType } from '@cluster/utils';
+import { Lazy } from '@core/Lazy';
 
 export class RandIntSubtag extends BaseSubtag {
     public constructor() {
@@ -13,7 +13,7 @@ export class RandIntSubtag extends BaseSubtag {
                     description: 'Chooses a random whole number between `min` and `max` (inclusive). `min` defaults to 0.',
                     exampleCode: 'You rolled a {randint;1;6}.',
                     exampleOut: 'You rolled a 5.',
-                    execute: (ctx, args, subtag) => this.randInt(ctx, args.map(arg => arg.value), subtag)
+                    execute: (ctx, [min, max]) => this.randInt(ctx, min.value, max.value)
                 }
             ]
         });
@@ -21,19 +21,17 @@ export class RandIntSubtag extends BaseSubtag {
 
     public randInt(
         context: BBTagContext,
-        args: string[],
-        subtag: SubtagCall
+        minStr: string,
+        maxStr: string
     ): string {
-        let min = parse.int(args[0]);
-        let max = parse.int(args[1]);
-        const fallback = parse.int(context.scope.fallback ?? '');
-
-        if (isNaN(min)) min = fallback;
-        if (isNaN(max)) max = fallback;
+        const fallback = new Lazy(() => parse.int(context.scope.fallback ?? ''));
+        let min = parse.int(minStr, false) ?? fallback.value;
         if (isNaN(min))
-            return this.notANumber(context, subtag, 'Min is not a number');
+            throw new NotANumberError(minStr);
+
+        let max = parse.int(maxStr, false) ?? fallback.value;
         if (isNaN(max))
-            return this.notANumber(context, subtag, 'Max is not a number');
+            throw new NotANumberError(maxStr);
 
         if (min > max)
             [min, max] = [max, min];

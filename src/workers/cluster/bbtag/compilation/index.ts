@@ -1,3 +1,3 @@
-export * from './compileSignatures';
-export * from './createResolvers';
+export * from './createCompiler';
+export * from './createErrorCompiler';
 export * from './parseDefinitions';

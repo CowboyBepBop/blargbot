@@ -1,7 +1,7 @@
 import { BBTagContext } from '@cluster/bbtag';
 import { BBTagArray } from '@cluster/types';
 
-import { getArray } from './tagArray';
+import { resolve } from './tagArray';
 
 export interface ReturnObject {
     variable?: string;
@@ -11,13 +11,13 @@ export interface ReturnObject {
 export async function parse(context: BBTagContext, input: string): Promise<ReturnObject> {
     let obj: BBTagArray | JToken;
     let variable: string | undefined;
-    const arr = await getArray(context, input);
+    const arr = await resolve(context, input);
     if (arr !== undefined && Array.isArray(arr.v)) {
         obj = arr.v;
     } else {
         try {
             obj = JSON.parse(input);
-        } catch (err: unknown) {
+        } catch {
             const v = await context.variables.get(input);
             if (v !== undefined) {
                 variable = input;
@@ -26,7 +26,7 @@ export async function parse(context: BBTagContext, input: string): Promise<Retur
                     try {
                         if (typeof v === 'string')
                             obj = JSON.parse(v);
-                    } catch (err2: unknown) {
+                    } catch {
                         obj = {};
                     }
                 }
@@ -63,7 +63,7 @@ export function get(input: JObject | JArray, path: string | string[]): JToken {
         if (typeof obj === 'string') {
             try {
                 obj = JSON.parse(obj);
-            } catch (err: unknown) {
+            } catch {
                 // NOOP
             }
         }
@@ -91,7 +91,7 @@ export function get(input: JObject | JArray, path: string | string[]): JToken {
     return obj;
 }
 
-export function set(input: JObject | JArray, path: string | string[], value: string, forceCreate = false): JToken {
+export function set(input: JObject | JArray, path: string | string[], value: string, forceCreate = false): JObject | JArray {
     if (typeof path === 'string')
         path = path.split('.');
     const comps = path;

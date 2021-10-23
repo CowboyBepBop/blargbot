@@ -1,6 +1,6 @@
-import { BaseSubtag } from '@cluster/bbtag';
+import { BaseSubtag, BBTagContext, BBTagRuntimeError, NoUserFoundError } from '@cluster/bbtag';
 import { discordUtil, SubtagType } from '@cluster/utils';
-import { User } from 'discord.js';
+import { Constants, DiscordAPIError } from 'discord.js';
 
 export class UserSetNickSubtag extends BaseSubtag {
     public constructor() {
@@ -14,32 +14,30 @@ export class UserSetNickSubtag extends BaseSubtag {
                     description: 'Sets `user`\'s nickname to `nick`. Leave `nick` blank to reset their nickname.',
                     exampleCode: '{usersetnick;super cool nickname}\n{//;Reset the the nickname}\n{usersetnick;}',
                     exampleOut: '', //TODO meaningful output
-                    execute: async (context, [{ value: nick }, { value: userStr }], subtag): Promise<string | void> => {
-                        let user: User | undefined = context.user;
-                        if (userStr !== '') {
-                            user = await context.queryUser(userStr);
-                        }
-
-                        if (user === undefined)
-                            return this.noUserFound(context, subtag);
-
-                        const member = await context.util.getMember(context.guild, user.id);
-
-                        try {
-                            if (user.id === context.discord.user.id)
-                                await member?.setNickname(nick);
-                            else {
-                                const fullReason = discordUtil.formatAuditReason(context.user, context.scope.reason);
-                                await member?.setNickname(nick, fullReason);
-                            }
-                        } catch (err: unknown) {
-                            if (err instanceof Error) {
-                                this.customError('Could not change nickname', context, subtag);
-                            }
-                        }
-                    }
+                    execute: (ctx, [nickname, user]) => this.setNickname(ctx, user.value, nickname.value)
                 }
             ]
         });
+    }
+    public async setNickname(context: BBTagContext, userStr: string, nickname: string): Promise<undefined> {
+        const user = userStr === '' ? context.user : await context.queryUser(userStr);
+        if (user === undefined)
+            throw new NoUserFoundError(userStr);
+
+        const member = await context.util.getMember(context.guild, user.id);
+
+        try {
+            if (user.id === context.discord.user.id)
+                await member?.setNickname(nickname);
+            else {
+                const fullReason = discordUtil.formatAuditReason(context.user, context.scope.reason);
+                await member?.setNickname(nickname, fullReason);
+            }
+            return undefined;
+        } catch (err: unknown) {
+            if (err instanceof DiscordAPIError && err.code === Constants.APIErrors.MISSING_PERMISSIONS)
+                throw new BBTagRuntimeError('Could not change nickname', 'I dont have permission to change the users nickname');
+            throw err;
+        }
     }
 }

@@ -16,7 +16,7 @@ export class PrefixSubtag extends BaseSubtag {
                         const prefix = await ctx.database.guilds.getSetting(ctx.guild.id, 'prefix');
                         switch (typeof prefix) {
                             case 'string': return prefix;
-                            case 'undefined': return ctx.engine.util.config.discord.defaultPrefix;
+                            case 'undefined': return ctx.cluster.util.config.discord.defaultPrefix;
                             default: return prefix[0];
                         }
                     }

@@ -1,10 +1,7 @@
-import { BaseSubtag, BBTagContext } from '@cluster/bbtag';
-import { SubtagArgumentValue, SubtagCall } from '@cluster/types';
+import { BaseSubtag, BBTagContext, BBTagRuntimeError, ChannelNotFoundError, NotANumberError, NoUserFoundError } from '@cluster/bbtag';
+import { SubtagArgumentValue } from '@cluster/types';
 import { bbtagUtil, overrides, parse, SubtagType } from '@cluster/utils';
 import { guard } from '@core/utils';
-import { GuildChannels, User } from 'discord.js';
-
-import { Statement } from '../../types';
 
 export class WaitMessageSubtags extends BaseSubtag {
     public constructor() {
@@ -28,21 +25,21 @@ export class WaitMessageSubtags extends BaseSubtag {
                     description: 'Pauses the command until the executing user sends a message in the current channel.',
                     exampleCode: '{waitmessage}',
                     exampleOut: '["111111111111111","2222222222222"]',
-                    execute: (ctx, _, subtag) => this.awaitMessage(ctx, subtag, ctx.channel.id, ctx.user.id)
+                    execute: (ctx) => this.awaitMessage(ctx, ctx.channel.id, ctx.user.id)
                 },
                 {
                     parameters: ['channelIDs', 'userIDs?'],
                     description: 'Pauses the command until one of `userIDs` sends a message in one of `channelIDs`',
                     exampleCode: '{waitmessage;111111111111111;{userid;stupid cat}}',
                     exampleOut: '["111111111111111", "103347843934212096"]',
-                    execute: (ctx, args, subtag) => this.awaitMessage(ctx, subtag, args[0].value, args[1].value)
+                    execute: (ctx, [channelIds, userIds]) => this.awaitMessage(ctx, channelIds.value, userIds.value)
                 },
                 {
                     parameters: ['channelIDs', 'userIDs', '~condition:true', 'timeout?:60'],
                     description: 'Pauses the command until `condition` returns true when one of `userIDs` sends a message in one of `channelIDs`.',
                     exampleCode: '{waitmessage;111111111111111;{userid;stupid cat};{bool;{username};startswith;stupid};50}',
                     exampleOut: '["111111111111111", "103347843934212096"]',
-                    execute: (ctx, args, subtag) => this.awaitMessage(ctx, subtag, args[0].value, args[1].value, args[2], args[3].value)
+                    execute: (ctx, [channelIds, userIds, condition, timeout]) => this.awaitMessage(ctx, channelIds.value, userIds.value, condition, timeout.value)
                 }
             ]
         });
@@ -50,53 +47,50 @@ export class WaitMessageSubtags extends BaseSubtag {
 
     public async awaitMessage(
         context: BBTagContext,
-        subtag: SubtagCall,
         channelStr: string,
         userStr: string,
         code?: SubtagArgumentValue,
         timeoutStr?: string
-    ): Promise<string> {
+    ): Promise<[string, string]> {
         // parse channels
-        let channels;
+        let channels: string[];
         if (channelStr !== '') {
-            let flattenedChannels;
-            flattenedChannels = bbtagUtil.tagArray.flattenArray([channelStr]).map(i => parse.string(i));
-            flattenedChannels = await Promise.all(flattenedChannels.map(async input => await context.queryChannel(input, { noLookup: true })));
-            channels = flattenedChannels.filter((channel): channel is GuildChannels => channel !== undefined);
-            if (flattenedChannels.length !== channels.length)
-                return this.channelNotFound(context, subtag);
-            channels = channels.map(channel => channel.id);
+            const flattenedChannels = bbtagUtil.tagArray.flattenArray([channelStr]).map(i => parse.string(i));
+            channels = [];
+            for (const input of flattenedChannels) {
+                const channel = await context.queryChannel(input, { noErrors: true, noLookup: true });
+                if (channel === undefined)
+                    throw new ChannelNotFoundError(input);
+                channels.push(channel.id);
+            }
         } else {
             channels = [context.channel.id];
         }
+
         // parse users
-        let users;
+        let users: string[];
         if (userStr !== '') {
-            let flattenedUsers;
-            flattenedUsers = bbtagUtil.tagArray.flattenArray([userStr]).map(i => parse.string(i));
-            flattenedUsers = await Promise.all(flattenedUsers.map(async input => await context.queryUser(input, { noLookup: true })));
-            users = flattenedUsers.filter((user): user is User => user !== undefined);
-            if (users.length !== flattenedUsers.length)
-                return this.noUserFound(context, subtag);
-            users = users.map(user => user.id);
+            const flattenedUsers = bbtagUtil.tagArray.flattenArray([userStr]).map(i => parse.string(i));
+            users = [];
+            for (const input of flattenedUsers) {
+                const user = await context.queryUser(input, { noErrors: true, noLookup: true });
+                if (user === undefined)
+                    throw new NoUserFoundError(input);
+                users.push(user.id);
+            }
         } else {
             users = [context.user.id];
         }
 
         // parse check code
-        let condition: Statement;
-        if (code !== undefined) {
-            condition = bbtagUtil.parse(code.raw);
-        } else {
-            condition = bbtagUtil.parse('true');
-        }
+        const condition = code?.code ?? ['true'];
 
         // parse timeout
         let timeout;
         if (timeoutStr !== undefined) {
             timeout = parse.float(timeoutStr);
             if (isNaN(timeout))
-                return this.notANumber(context, subtag);
+                throw new NotANumberError(timeoutStr);
             if (timeout < 0)
                 timeout = 0;
             if (timeout > 300)
@@ -105,15 +99,7 @@ export class WaitMessageSubtags extends BaseSubtag {
             timeout = 60;
         }
 
-        const subtagOverrides = [];
-        for (const name of overrides.waitmessage) {
-            subtagOverrides.push(context.override(name, {
-                execute: (_context: BBTagContext, subtagName: string, _subtag: SubtagCall) => {
-                    return this.customError(`Subtag {${subtagName}} is disabled inside {waitmessage}`, _context, _subtag);
-                }
-            }));
-        }
-
+        const subtagOverrides = overrides.waitmessage.map(name => context.disableSubtag(name, this.name));
         const userSet = new Set(users);
         const result = await context.util.cluster.awaiter.messages.wait(channels, async message => {
             if (!userSet.has(message.author.id) || !guard.isGuildMessage(message))
@@ -125,10 +111,10 @@ export class WaitMessageSubtags extends BaseSubtag {
         }, timeout * 1000);
 
         for (const override of subtagOverrides)
-            override.revert();
+            override.reset();
         if (result === undefined)
-            return this.customError(`Wait timed out after ${timeout * 1000}`, context, subtag);
-        return JSON.stringify([result.channel.id, result.id]);
+            throw new BBTagRuntimeError(`Wait timed out after ${timeout * 1000}`);
+        return [result.channel.id, result.id];
 
     }
 }

@@ -1,6 +1,6 @@
 import { Cluster } from '@cluster';
 import { limits } from '@cluster/bbtag';
-import { ExecutionResult } from '@cluster/types';
+import { BBTagExecutionResult } from '@cluster/types';
 import { snowflake } from '@cluster/utils';
 import { GuildTriggerTag } from '@core/types';
 import { guard } from '@core/utils';
@@ -11,7 +11,7 @@ export class GreetingManager {
     public constructor(protected readonly cluster: Cluster) {
     }
 
-    public async greet(member: GuildMember): Promise<ExecutionResult | 'CODE_MISSING' | 'CHANNEL_MISSING'> {
+    public async greet(member: GuildMember): Promise<BBTagExecutionResult | 'CODE_MISSING' | 'CHANNEL_MISSING'> {
         const greeting = await this.cluster.database.guilds.getGreeting(member.guild.id);
         if (greeting === undefined)
             return 'CODE_MISSING';
@@ -24,7 +24,7 @@ export class GreetingManager {
         return await this.execute(greeting, channel, member, 'greet');
     }
 
-    public async farewell(member: GuildMember): Promise<ExecutionResult | 'CODE_MISSING' | 'CHANNEL_MISSING'> {
+    public async farewell(member: GuildMember): Promise<BBTagExecutionResult | 'CODE_MISSING' | 'CHANNEL_MISSING'> {
         const farewell = await this.cluster.database.guilds.getFarewell(member.guild.id);
         if (farewell === undefined)
             return 'CODE_MISSING';
@@ -37,7 +37,7 @@ export class GreetingManager {
         return await this.execute(farewell, channel, member, 'farewell');
     }
 
-    private async execute(command: GuildTriggerTag, channel: GuildTextBasedChannels, member: GuildMember, name: string): Promise<ExecutionResult> {
+    private async execute(command: GuildTriggerTag, channel: GuildTextBasedChannels, member: GuildMember, name: string): Promise<BBTagExecutionResult> {
         return await this.cluster.bbtag.execute(command.content, {
             author: command.author,
             inputRaw: '',

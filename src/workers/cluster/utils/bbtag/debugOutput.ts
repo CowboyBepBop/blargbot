@@ -1,11 +1,11 @@
-import { ExecutionResult } from '@cluster/types';
+import { BBTagExecutionResult } from '@cluster/types';
 import { codeBlock, humanize } from '@core/utils';
 import { MessageOptions } from 'discord.js';
 import moment from 'moment';
 
 import { stringify } from './stringify';
 
-export function createDebugOutput(result: ExecutionResult): MessageOptions {
+export function createDebugOutput(result: BBTagExecutionResult): MessageOptions {
     const performance: Record<string, unknown> = {};
     for (const key of Object.keys(result.duration.subtag)) {
         const times = result.duration.subtag[key];
@@ -35,8 +35,8 @@ export function createDebugOutput(result: ExecutionResult): MessageOptions {
                     code: result.source,
                     debug: result.debug,
                     errors: result.errors.map(e => ({
-                        error: e.error,
-                        details: e.debugMessage,
+                        error: e.message,
+                        details: e.details,
                         subtag: e.subtag === undefined ? undefined : {
                             name: stringify(e.subtag.name),
                             arguments: e.subtag.args.map(stringify),

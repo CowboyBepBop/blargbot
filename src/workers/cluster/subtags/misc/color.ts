@@ -1,8 +1,8 @@
-import { BaseSubtag, BBTagContext } from '@cluster/bbtag';
+import { BaseSubtag, BBTagContext, BBTagRuntimeError } from '@cluster/bbtag';
 import { bbtagUtil, SubtagType } from '@cluster/utils';
 import Color from 'color';
 
-const getArray = bbtagUtil.tagArray.getArray;
+const getArray = bbtagUtil.tagArray.resolve;
 
 type ColorFormat = typeof formats[number];
 
@@ -50,7 +50,8 @@ export class ColorSubtag extends BaseSubtag {
         outputStr: string,
         inputStr: string | undefined
     ): Promise<string> {
-        if (colorStr === '') return '`Invalid color`'; //TODO Would be better to use this.customError to add it to debug. This applies to the Invalid input/output formats too.
+        if (colorStr === '')
+            throw new BBTagRuntimeError('Invalid color');
 
         const arr = await getArray(context, colorStr);
         let input: string | string[];

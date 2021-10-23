@@ -1,6 +1,6 @@
 import { Cluster } from '@cluster';
 import { CustomCommandLimit } from '@cluster/bbtag';
-import { ExecutionResult } from '@cluster/types';
+import { BBTagExecutionResult } from '@cluster/types';
 import { guard, sleep, snowflake } from '@cluster/utils';
 import { GuildTriggerTag } from '@core/types';
 import { Collection, Guild, GuildMember, GuildTextBasedChannels } from 'discord.js';
@@ -52,9 +52,9 @@ export class IntervalManager {
         }
     }
 
-    public async invoke(guild: Guild): Promise<ExecutionResult | 'NO_INTERVAL' | 'TOO_LONG' | 'FAILED' | 'MISSING_AUTHORIZER' | 'MISSING_CHANNEL'>
-    public async invoke(guild: Guild, interval: GuildTriggerTag): Promise<ExecutionResult | 'TOO_LONG' | 'FAILED' | 'MISSING_AUTHORIZER' | 'MISSING_CHANNEL'>
-    public async invoke(guild: Guild, interval?: GuildTriggerTag): Promise<ExecutionResult | 'NO_INTERVAL' | 'TOO_LONG' | 'FAILED' | 'MISSING_AUTHORIZER' | 'MISSING_CHANNEL'> {
+    public async invoke(guild: Guild): Promise<BBTagExecutionResult | 'NO_INTERVAL' | 'TOO_LONG' | 'FAILED' | 'MISSING_AUTHORIZER' | 'MISSING_CHANNEL'>
+    public async invoke(guild: Guild, interval: GuildTriggerTag): Promise<BBTagExecutionResult | 'TOO_LONG' | 'FAILED' | 'MISSING_AUTHORIZER' | 'MISSING_CHANNEL'>
+    public async invoke(guild: Guild, interval?: GuildTriggerTag): Promise<BBTagExecutionResult | 'NO_INTERVAL' | 'TOO_LONG' | 'FAILED' | 'MISSING_AUTHORIZER' | 'MISSING_CHANNEL'> {
         interval ??= await this.cluster.database.guilds.getInterval(guild.id);
         if (interval === undefined) return 'NO_INTERVAL';
 
@@ -70,7 +70,7 @@ export class IntervalManager {
         ]);
     }
 
-    private async invokeCore(member: GuildMember, channel: GuildTextBasedChannels, interval: GuildTriggerTag): Promise<ExecutionResult | 'FAILED'> {
+    private async invokeCore(member: GuildMember, channel: GuildTextBasedChannels, interval: GuildTriggerTag): Promise<BBTagExecutionResult | 'FAILED'> {
         try {
             const result = await this.cluster.bbtag.execute(interval.content, {
                 message: {

@@ -8,6 +8,7 @@ export class FlagSubtag extends BaseSubtag {
             category: SubtagType.BOT,
             definition: [
                 {
+                    type: 'constant',
                     parameters: ['flagName'],
                     description: 'Returns the value of the specified case-sensitive flag code. Use `_` to get the values without a flag.',
                     exampleCode: '{flag;a} {flag;_}',

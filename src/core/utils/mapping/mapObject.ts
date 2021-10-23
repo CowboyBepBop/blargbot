@@ -15,11 +15,11 @@ export function mapObject<T, R>(mappings: TypeMappings<T>, options: TypeMappingO
         if (value === null)
             return options.ifNull ?? _result.never;
 
-        const objValue = <Record<string, unknown>>value;
+        const objValue = <Record<PropertyKey, unknown>>value;
         const result = options.initial?.() ?? {} as Partial<T>;
-        const remainingKeys = new Set(Object.keys(objValue));
+        const remainingKeys = new Set<PropertyKey>(Object.keys(objValue));
 
-        function checkKey<K extends string & keyof T>(resultKey: K, sourceKey: string | undefined, mapping: TypeMapping<T[K]>): boolean {
+        function checkKey<K extends keyof T>(resultKey: K, sourceKey: PropertyKey | undefined, mapping: TypeMapping<T[K]>): boolean {
             if (sourceKey !== undefined) {
                 if (!guard.hasProperty(objValue, sourceKey))
                     return mapping(undefined).valid;
@@ -34,8 +34,8 @@ export function mapObject<T, R>(mappings: TypeMappings<T>, options: TypeMappingO
             return true;
         }
 
-        for (const resultKey of Object.keys(mappings)) {
-            if (!checkKey(resultKey, ...splitMapping(resultKey, mappings[resultKey])))
+        for (const [resultKey, mapping] of Object.entries<keyof T, TypeMappings<T>[keyof T]>(mappings)) {
+            if (!checkKey(resultKey, ...splitMapping(resultKey, mapping)))
                 return _result.never;
         }
 
@@ -46,7 +46,7 @@ export function mapObject<T, R>(mappings: TypeMappings<T>, options: TypeMappingO
     };
 }
 
-function splitMapping<T, K extends string & keyof T>(key: K, mapping: TypeMappings<T>[K]): [string | undefined, TypeMapping<T[K]>] {
+function splitMapping<T, K extends keyof T>(key: K, mapping: TypeMappings<T>[K]): [PropertyKey | undefined, TypeMapping<T[K]>] {
     if (typeof mapping !== 'object')
         return [key, mapping];
 

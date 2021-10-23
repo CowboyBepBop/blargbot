@@ -9,6 +9,7 @@ export class GuildCreateDat extends BaseSubtag {
             category: SubtagType.GUILD,
             definition: [
                 {
+                    type: 'constant',
                     parameters: ['format?'],
                     description: 'Returns the date the current guild was created, in UTC+0. If a `format` code is specified, the date is ' +
                         'formatted accordingly. Leave blank for default formatting. See the [moment documentation](http://momentjs.com/docs/#/displaying/format/) for more information.',

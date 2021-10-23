@@ -1,6 +1,6 @@
-import { BaseSubtag, BBTagContext } from '@cluster/bbtag';
-import { SubtagCall } from '@cluster/types';
+import { BaseSubtag, BBTagContext, BBTagRuntimeError, NotANumberError } from '@cluster/bbtag';
 import { between, parse, SubtagType } from '@cluster/utils';
+import { Lazy } from '@core/Lazy';
 
 export class BaseNumberSubtag extends BaseSubtag {
     public constructor() {
@@ -10,58 +10,35 @@ export class BaseNumberSubtag extends BaseSubtag {
             category: SubtagType.MATH,
             definition: [
                 {
+                    type: 'constant',
                     parameters: ['integer', 'origin?:10', 'radix'],
                     description: 'Converts `integer` from a base `origin` number into a base `radix` number. `radix` and `origin` must be between 2 and 36.',
                     exampleCode: '{base;FF;16;10}',
                     exampleOut: '255',
-                    execute: (ctx, [integer, origin, radix], subtag) => this.toBase(ctx, integer.value, origin.value, radix.value, subtag)
+                    execute: (ctx, [integer, origin, radix]) => this.toBase(ctx, integer.value, origin.value, radix.value)
                 }
             ]
         });
     }
 
-    public toBase(
-        context: BBTagContext,
-        valueStr: string,
-        originStr: string,
-        radixStr: string,
-        subtag: SubtagCall
-    ): string {
-        let fallback;
-        if (context.scope.fallback !== undefined) {
-            fallback = parse.int(context.scope.fallback);
-            if (isNaN(fallback) || !between(fallback, 2, 36, true))
-                fallback = undefined;
-        }
+    public toBase(context: BBTagContext, valueStr: string, originStr: string, radixStr: string): string {
+        const fallback = new Lazy(() => parse.int(context.scope.fallback ?? ''));
 
-        let origin = parse.int(originStr);
-        let radix = parse.int(radixStr);
+        const origin = parse.int(originStr, false) ?? fallback.value;
+        if (isNaN(origin))
+            throw new NotANumberError(originStr);
+        if (!between(origin, 2, 36, true))
+            throw new BBTagRuntimeError('Base must be between 2 and 36', origin.toString());
 
-        if (isNaN(origin) && fallback !== undefined) origin = fallback;
-        if (isNaN(radix) && fallback !== undefined) radix = fallback;
+        const radix = parse.int(radixStr, false) ?? fallback.value;
+        if (isNaN(radix))
+            throw new NotANumberError(radixStr);
+        if (!between(radix, 2, 36, true))
+            throw new BBTagRuntimeError('Base must be between 2 and 36', radix.toString());
 
-        if (isNaN(origin) || isNaN(radix))
-            return this.notANumber(context, subtag);
-
-        if (!between(origin, 2, 36, true) && fallback !== undefined) origin = fallback;
-        if (!between(radix, 2, 36, true) && fallback !== undefined) radix = fallback;
-
-        if (!between(origin, 2, 36, true) || !between(radix, 2, 36, true)) {
-            return this.customError(
-                'Base must be between 2 and 36',
-                context,
-                subtag
-            );
-        }
-
-        let value = parse.int(valueStr, origin);
-        if (isNaN(value)) {
-            if (fallback !== undefined && !isNaN(fallback)) {
-                value = fallback;
-            } else {
-                return this.notANumber(context, subtag);
-            }
-        }
+        const value = parse.int(valueStr, false, origin) ?? fallback.value;
+        if (isNaN(value))
+            throw new NotANumberError(valueStr);
         return value.toString(radix);
     }
 }

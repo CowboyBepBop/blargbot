@@ -1,5 +1,5 @@
-import { BaseSubtag, BBTagContext, tagVariableScopes } from '@cluster/bbtag';
-import { SubtagArgumentValue, SubtagCall } from '@cluster/types';
+import { BaseSubtag, BBTagContext, BBTagRuntimeError, tagVariableScopes } from '@cluster/bbtag';
+import { SubtagArgumentValue } from '@cluster/types';
 import { SubtagType } from '@cluster/utils';
 import ReadWriteLock from 'rwlock';
 
@@ -40,7 +40,7 @@ export class LockSubtag extends BaseSubtag {
                         '\nMiddle' +
                         '\nEnd' +
                         '\nThis order is guaranteed always. Without a lock it isnt',
-                    execute: async (ctx, [{ value: mode }, { value: key }, code], subtag) => await this.lock(ctx, mode, key, code, subtag)
+                    execute: async (ctx, [{ value: mode }, { value: key }, code]) => await this.lock(ctx, mode, key, code)
                 }
             ]
         });
@@ -50,21 +50,16 @@ export class LockSubtag extends BaseSubtag {
         context: BBTagContext,
         mode: string,
         key: string,
-        code: SubtagArgumentValue,
-        subtag: SubtagCall
+        code: SubtagArgumentValue
     ): Promise<string> {
         mode = mode.toLowerCase();
 
         if (!isValidLockMode(mode)) {
-            return this.customError(
-                'Mode must be \'read\' or \'write\'',
-                context,
-                subtag
-            );
+            throw new BBTagRuntimeError('Mode must be \'read\' or \'write\'');
         }
 
         if (key.length === 0)
-            return this.customError('Key cannot be empty', context, subtag);
+            throw new BBTagRuntimeError('Key cannot be empty');
 
         const scope = tagVariableScopes.find((s) => key.startsWith(s.prefix));
         if (scope === undefined) throw new Error('Missing default variable scope!');
@@ -74,16 +69,13 @@ export class LockSubtag extends BaseSubtag {
             key.substring(scope.prefix.length)
         );
 
-        const lockOverride = context.override('lock', {
-            execute: (context, _, subtag) =>
-                this.customError('Lock cannot be nested', context, subtag)
-        });
+        const lockOverride = context.disableSubtag('lock', this.name);
 
         const release = await lockAsync(lock, mode === 'read' ? 'readLock' : 'writeLock');
         try {
             return await code.wait();
         } finally {
-            lockOverride.revert();
+            lockOverride.reset();
             release();
         }
     }

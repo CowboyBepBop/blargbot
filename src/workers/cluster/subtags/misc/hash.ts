@@ -8,6 +8,7 @@ export class HashSubtag extends BaseSubtag {
             category: SubtagType.COMPLEX,
             definition: [
                 {
+                    type: 'constant',
                     parameters: ['text'],
                     description:
                         'Returns the numeric hash of `text`, based on the unicode value of each individual character. ' +

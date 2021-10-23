@@ -9,6 +9,7 @@ export class HtmlDecodeSubtag extends BaseSubtag {
             category: SubtagType.MESSAGE,
             definition: [
                 {
+                    type: 'constant',
                     parameters: ['text+'],
                     description: 'Encodes `text` with escaped html entities.',
                     exampleCode: '{htmlencode;<hello, world>}',

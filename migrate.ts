@@ -360,7 +360,7 @@ function migrateCommandPerms(guildId: string, guild: any, logger: Logger, contex
 
     let changed = false;
 
-    for (const [commandName, perms] of Object.entries(commandPerms)) {
+    for (const [commandName, perms] of Object.entries<string, any>(commandPerms)) {
         const newPerm: r.UpdateData<MutableCommandPermissions> = {};
         switch (typeof perms.permission) {
             case 'object': // null

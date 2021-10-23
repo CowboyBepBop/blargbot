@@ -8,11 +8,12 @@ export class UserNameSubtag extends BaseSubtag {
             category: SubtagType.USER,
             definition: [
                 {
+                    type: 'constant',
                     parameters: [],
                     description: 'Returns the username of the executing user.',
                     exampleCode: 'Your username is {username}!',
                     exampleOut: 'Your username is Cool Dude 1337!',
-                    execute: (ctx) => ctx.user.username.replace(/@/g, '@\u200b')
+                    execute: (ctx) => ctx.user.username
                 },
                 {
                     parameters: ['user', 'quiet?'],
@@ -34,7 +35,7 @@ export class UserNameSubtag extends BaseSubtag {
         const user = await context.queryUser(userId, { noLookup: quiet });
 
         if (user !== undefined) {
-            return user.username.replace(/@/g, '@\u200b');
+            return user.username;
         }
 
         return quiet ? '' : ''; //TODO add behaviour for this????

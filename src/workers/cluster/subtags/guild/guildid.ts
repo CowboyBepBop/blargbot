@@ -9,6 +9,7 @@ export class GuildIdSubtag extends BaseSubtag {
             desc: 'Returns the id of the current guild.',
             definition: [
                 {
+                    type: 'constant',
                     parameters: [],
                     exampleCode: 'The guild\'s id is {guildid}',
                     exampleOut: 'The guild\'s id is 1234567890123456',

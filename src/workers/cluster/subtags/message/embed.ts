@@ -1,4 +1,4 @@
-import { BaseSubtag } from '@cluster/bbtag';
+import { BaseSubtag, BBTagContext } from '@cluster/bbtag';
 import { discordUtil, SubtagType } from '@cluster/utils';
 
 export class EmbedSubtag extends BaseSubtag {
@@ -17,11 +17,14 @@ export class EmbedSubtag extends BaseSubtag {
                         '[here](https://leovoel.github.io/embed-visualizer/)',
                     exampleCode: '{embed;{lb}"title":"Hello!"{rb}}',
                     exampleOut: '(an embed with "Hello!" as the title)',
-                    execute: (ctx, args) => {
-                        ctx.state.embed = discordUtil.parseEmbed(args[0].value);
-                    }
+                    execute: (ctx, [embed]) => this.setEmbed(ctx, embed.value)
                 }
             ]
         });
+    }
+
+    public setEmbed(context: BBTagContext, embedStr: string): undefined {
+        context.state.embed = discordUtil.parseEmbed(embedStr);
+        return undefined;
     }
 }

@@ -1,5 +1,5 @@
-import { BaseSubtag, BBTagContext } from '@cluster/bbtag';
-import { SubtagArgumentValueArray, SubtagCall } from '@cluster/types';
+import { BaseSubtag, BBTagRuntimeError, NotABooleanError, NotANumberError } from '@cluster/bbtag';
+import { SubtagArgumentValueArray } from '@cluster/types';
 import { bbtagUtil, parse, SubtagType } from '@cluster/utils';
 import { MessageEmbedOptions } from 'discord.js';
 
@@ -13,22 +13,19 @@ export class OperatorSubtag extends BaseSubtag {
             category: SubtagType.COMPLEX,
             definition: [//! overwritten
                 {
+                    type: 'constant',
                     parameters: ['values+'],
                     description: '',
-                    execute: (ctx, args, subtag) =>
-                        this.applyOperation(ctx, args, subtag)
+                    execute: (_, args) =>
+                        this.applyOperation(args)
                 }
             ]
         });
     }
 
-    public applyOperation(
-        context: BBTagContext,
-        args: SubtagArgumentValueArray,
-        subtag: SubtagCall
-    ): string {
+    public applyOperation(args: SubtagArgumentValueArray): string | number | boolean {
         if (args.subtagName.toLowerCase() === 'operator')
-            return this.customError('Invalid operator \'operator\'', context, subtag);
+            throw new BBTagRuntimeError('Invalid operator \'operator\'');
 
         const operator = args.subtagName;
         const values = args.map((arg) => arg.value);
@@ -38,13 +35,13 @@ export class OperatorSubtag extends BaseSubtag {
             /**
              * * It's important that numeric comes before logic, as they both have ^ as an operator
              */
-            return this.applyNumericOperation(context, operator, values, subtag);
+            return this.applyNumericOperation(operator, values);
         } else if (bbtagUtil.operators.isLogicOperator(operator)) {
-            return this.applyLogicOperation(context, operator, values, subtag);
+            return this.applyLogicOperation(operator, values);
         }
-        //! This should never happen
-        return this.customError('Invalid operator \'' + operator + '\'', context, subtag);
 
+        //! This should never happen
+        throw new BBTagRuntimeError('Invalid operator \'' + operator + '\'');
     }
 
     public applyComparisonOperation(
@@ -90,56 +87,39 @@ export class OperatorSubtag extends BaseSubtag {
         }
         return pairedArrays;
     }
-    public applyNumericOperation(
-        context: BBTagContext,
-        operator: keyof typeof numeric,
-        values: string[],
-        subtag: SubtagCall
-    ): string {
+
+    public applyNumericOperation(operator: keyof typeof numeric, values: string[]): number {
         const flattenedValues = bbtagUtil.tagArray.flattenArray(values).map((arg) => {
             switch (typeof arg) {
-                case 'number': return arg;
-                case 'string': return parse.float(arg);
-                default: return NaN;
+                case 'number':
+                    return arg;
+                case 'string': {
+                    const val = parse.float(arg, false);
+                    if (val !== undefined)
+                        return val;
+                }
             }
+            throw new NotANumberError(arg);
         });
 
-        if (flattenedValues.filter(isNaN).length !== 0) {
-            const atIndex = flattenedValues.findIndex(isNaN);
-            return this.notANumber(
-                context,
-                subtag,
-                `${flattenedValues[atIndex]} at index ${atIndex}`
-            );
-        }
-
-        return flattenedValues.reduce(numeric[operator]).toString();
+        return flattenedValues.reduce(numeric[operator]);
     }
 
-    public applyLogicOperation(
-        context: BBTagContext,
-        operator: keyof typeof logic,
-        values: string[],
-        subtag: SubtagCall
-    ): string {
+    public applyLogicOperation(operator: keyof typeof logic, values: string[]): boolean {
         if (operator === '!') {
             const value = parse.boolean(values[0]);
             if (typeof value !== 'boolean')
-                return this.notABoolean(context, subtag, values[0] + ' is not a boolean');
-            return logic[operator]([value]).toString();
+                throw new NotABooleanError(values[0]);
+            return logic[operator]([value]);
         }
 
-        const parsedValues = values.map((value) => parse.boolean(value));
-        const parsedBools = parsedValues.filter((v): v is boolean => typeof v === 'boolean');
-        if (parsedBools.length !== parsedValues.length)
-            return this.notABoolean(
-                context,
-                subtag,
-                `At index ${parsedValues.findIndex(
-                    (v) => typeof v !== 'boolean'
-                )}`
-            );
-        return logic[operator](parsedBools).toString();
+        const parsedValues = values.map((value) => {
+            const result = parse.boolean(value);
+            if (result !== undefined)
+                return result;
+            throw new NotABooleanError(value);
+        });
+        return logic[operator](parsedValues);
     }
 
     public enrichDocs(

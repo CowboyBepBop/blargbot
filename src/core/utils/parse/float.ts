@@ -1,5 +1,5 @@
 export function float(s: string | number, allowNaN?: true): number;
-export function float(s: string | number, allowNaN: true): number | undefined
+export function float(s: string | number, allowNaN: false): number | undefined
 export function float(s: string | number, allowNaN?: boolean): number | undefined {
     const result = floatCore(s);
     if (!isNaN(result))

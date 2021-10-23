@@ -1,6 +1,5 @@
-import { BaseSubtag, BBTagContext } from '@cluster/bbtag';
+import { BaseSubtag, BBTagContext, NotANumberError, NoUserFoundError } from '@cluster/bbtag';
 import { Cluster } from '@cluster/Cluster';
-import { SubtagCall } from '@cluster/types';
 import { parse, SubtagType } from '@cluster/utils';
 import { GuildMember, User } from 'discord.js';
 
@@ -18,14 +17,14 @@ export class PardonSubtag extends BaseSubtag {
                     description: 'Gives `user` one pardon.',
                     exampleCode: 'Be pardoned! {pardon}',
                     exampleOut: 'Be pardoned! 0',
-                    execute: (ctx, args, subtag) => this.pardon(ctx, args[0].value, '1', '', subtag)
+                    execute: (ctx, [user]) => this.pardon(ctx, user.value, '1', '')
                 },
                 {
                     parameters: ['user', 'count:1', 'reason?'],
                     description: 'Gives `user` `count` pardons with `reason`.',
                     exampleCode: 'Be pardoned 9001 times, Stupid cat! {pardon;Stupid cat;9001}',
                     exampleOut: 'Be pardoned 9001 times, Stupid cat! 0',
-                    execute: (ctx, args, subtag) => this.pardon(ctx, args[0].value, args[1].value, args[2].value, subtag)
+                    execute: (ctx, [user, count, reason]) => this.pardon(ctx, user.value, count.value, reason.value)
                 }
             ]
         });
@@ -35,9 +34,8 @@ export class PardonSubtag extends BaseSubtag {
         context: BBTagContext,
         userStr: string,
         countStr: string,
-        reason: string,
-        subtag: SubtagCall
-    ): Promise<string> {
+        reason: string
+    ): Promise<number> {
         let user: User | undefined = context.user;
         const count = parse.int(countStr);
         let member: GuildMember | undefined;
@@ -49,11 +47,19 @@ export class PardonSubtag extends BaseSubtag {
         }
 
         if (user === undefined || member === undefined)
-            return this.noUserFound(context, subtag);
+            throw new NoUserFoundError(userStr);
+
         if (isNaN(count))
-            return this.notANumber(context, subtag);
+            throw new NotANumberError(countStr, 'integer');
 
         const result = await this.cluster.moderation.warns.pardon(member, this.cluster.discord.user, count, reason === '' ? 'Tag Pardon' : reason);
-        return result.toString();
+        switch (result) {
+            case 'countNaN':
+            case 'countNegative':
+            case 'countZero':
+                throw new NotANumberError(countStr, 'integer');
+            default:
+                return result;
+        }
     }
 }

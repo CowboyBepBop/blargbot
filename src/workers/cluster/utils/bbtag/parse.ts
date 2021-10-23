@@ -1,9 +1,10 @@
-import { SourceMarker, SourceToken, SourceTokenType, Statement, SubtagCall } from '@cluster/types';
+import { BBTagContext } from '@cluster/bbtag';
+import { BBTagAST, BBTagASTCall, SourceMarker, SourceToken, SourceTokenType } from '@cluster/types';
 
-type MutableSubtag = { -readonly [P in keyof SubtagCall]: SubtagCall[P] extends readonly Statement[] ? MutableStatement[] : SubtagCall[P] extends Statement ? MutableStatement : SubtagCall[P] };
+type MutableSubtag = { -readonly [P in keyof BBTagASTCall]: BBTagASTCall[P] extends readonly BBTagAST[] ? MutableStatement[] : BBTagASTCall[P] extends BBTagAST ? MutableStatement : BBTagASTCall[P] };
 type MutableStatement = Array<string | MutableSubtag>;
 
-export function parse(source: string): Statement {
+export function parse(source: string, context: BBTagContext): BBTagAST {
     const result: MutableStatement = [];
     const subtags: MutableSubtag[] = [];
     let builder = result;
@@ -33,7 +34,7 @@ export function parse(source: string): Statement {
                 break;
             case SourceTokenType.ENDSUBTAG:
                 if (subtag === undefined)
-                    return [`\`Unexpected '${token.content}'\``];
+                    return [context.addError(`Unexpected '${token.content}'`)];
                 trim(builder);
                 subtag.end = token.end;
                 subtag = subtags.pop();
@@ -48,7 +49,7 @@ export function parse(source: string): Statement {
     }
 
     if (subtag !== undefined)
-        return ['`Subtag is missing a \'}\'`'];
+        return [context.addError('Subtag is missing a \'}\'')];
 
     trim(result);
     return result;

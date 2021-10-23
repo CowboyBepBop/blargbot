@@ -8,6 +8,7 @@ export class MinSubtag extends BaseSubtag {
             category: SubtagType.MATH,
             definition: [
                 {
+                    type: 'constant',
                     parameters: ['numbers+'],
                     description: 'Returns the smallest entry out of `numbers`. If an array is provided, it will be expanded to its individual values.',
                     exampleCode: '{min;50;2;65}',

@@ -9,6 +9,7 @@ export class MessageIdSubtag extends BaseSubtag {
             desc: 'Returns the ID of the invoking message.',
             definition: [
                 {
+                    type: 'constant',
                     parameters: [],
                     exampleCode: 'The message id was {messageid}',
                     exampleOut: 'The message id was 111111111111111111',

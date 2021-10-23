@@ -1,8 +1,7 @@
-import { BaseSubtag, BBTagContext } from '@cluster/bbtag';
-import { Statement, SubtagArgumentValue, SubtagCall } from '@cluster/types';
+import { BaseSubtag, BBTagContext, BBTagRuntimeError, NotANumberError, NoUserFoundError } from '@cluster/bbtag';
+import { BBTagExecutionPlan } from '@cluster/types';
 import { bbtagUtil, overrides, parse, SubtagType } from '@cluster/utils';
 import { guard } from '@core/utils';
-import { User } from 'discord.js';
 
 export class WaitReactionSubtag extends BaseSubtag {
     public constructor() {
@@ -31,7 +30,7 @@ export class WaitReactionSubtag extends BaseSubtag {
                     exampleCode: '{waitreaction;12345678912345;stupid cat}',
                     exampleIn: '(reaction is added)',
                     exampleOut: '["111111111111111","12345678912345","3333333333333","🤔"]',
-                    execute: (ctx, args, subtag) => this.awaitReaction(ctx, subtag, args[0].value, args[1].value, '', 'true', '60')
+                    execute: (ctx, [messages, users]) => this.awaitReaction(ctx, messages.value, users.value, '', ['true'], '60')
                 },
                 {
                     parameters: ['messages', 'userIDs', 'reactions', '~condition?:true'],
@@ -39,7 +38,7 @@ export class WaitReactionSubtag extends BaseSubtag {
                     exampleCode: '{waitreaction;12345678912345;{userid;stupid cat};["🤔", "👀"];{bool;{reaction};==;👀}}',
                     exampleIn: '(🤔 was reacted)\n(👀 was reacted)',
                     exampleOut: '["111111111111111","12345678912345","3333333333333","👀"]',
-                    execute: (ctx, args, subtag) => this.awaitReaction(ctx, subtag, args[0].value, args[1].value, args[2].value, args[3], '60')
+                    execute: (ctx, [messages, users, reactions, condition]) => this.awaitReaction(ctx, messages.value, users.value, reactions.value, condition.code, '60')
                 },
                 {
                     parameters: ['messages', 'userIDs', 'reactions', '~condition:true', 'timeout:60'],
@@ -47,7 +46,7 @@ export class WaitReactionSubtag extends BaseSubtag {
                     exampleCode: '{waitreaction;12345678912345;["{userid;stupid cat}","{userid;titansmasher}"];["🤔", "👀"];;120}',
                     exampleIn: '(some random user reacted with 🤔)\n(titansmasher reacted with 🤔)',
                     exampleOut: '["111111111111111","12345678912345","135556895086870528","🤔"]',
-                    execute: (ctx, args, subtag) => this.awaitReaction(ctx, subtag, args[0].value, args[1].value, args[2].value, args[3], args[4].value)
+                    execute: (ctx, [messages, users, reactions, condition, timeout]) => this.awaitReaction(ctx, messages.value, users.value, reactions.value, condition.code, timeout.value)
                 }
             ]
         });
@@ -55,25 +54,26 @@ export class WaitReactionSubtag extends BaseSubtag {
 
     public async awaitReaction(
         context: BBTagContext,
-        subtag: SubtagCall,
         messageStr: string,
-        userIDStr: string,
+        userStr: string,
         reactions: string,
-        code: SubtagArgumentValue | string,
+        condition: BBTagExecutionPlan,
         timeoutStr: string
-    ): Promise<string | void> {
+    ): Promise<[string, string, string, string]> {
         // get messages
         const messages = bbtagUtil.tagArray.flattenArray([messageStr]).map(i => parse.string(i));
 
         // parse users
-        let users;
-        if (userIDStr !== '') {
-            let flattenedUsers: string[] | Array<User | undefined> = bbtagUtil.tagArray.flattenArray([userIDStr]).map(i => parse.string(i));
-            flattenedUsers = await Promise.all(flattenedUsers.map(async input => await context.queryUser(input, { noErrors: true, noLookup: true })));
-            users = flattenedUsers.filter((user): user is User => user !== undefined);
-            if (users.length !== flattenedUsers.length)
-                return this.noUserFound(context, subtag);
-            users = users.map(user => user.id);
+        let users: string[];
+        if (userStr !== '') {
+            const flattenedUsers = bbtagUtil.tagArray.flattenArray([userStr]).map(i => parse.string(i));
+            users = [];
+            for (const input of flattenedUsers) {
+                const user = await context.queryUser(input, { noErrors: true, noLookup: true });
+                if (user === undefined)
+                    throw new NoUserFoundError(input);
+                users.push(user.id);
+            }
         } else {
             users = [context.user.id];
         }
@@ -84,17 +84,9 @@ export class WaitReactionSubtag extends BaseSubtag {
             parsedReactions = bbtagUtil.tagArray.flattenArray([reactions]).map(i => parse.string(i));
             parsedReactions = [...new Set(parsedReactions.flatMap(i => parse.emoji(i)))];
             if (parsedReactions.length === 0)
-                return this.customError('Invalid Emojis', context, subtag);
+                throw new BBTagRuntimeError('Invalid Emojis');
         } else {
             parsedReactions = undefined;
-        }
-
-        // parse check code
-        let condition: Statement;
-        if (typeof code === 'string') {
-            condition = bbtagUtil.parse(code);
-        } else {
-            condition = bbtagUtil.parse(code.raw);
         }
 
         // parse timeout
@@ -102,7 +94,7 @@ export class WaitReactionSubtag extends BaseSubtag {
         if (timeoutStr !== '') {
             timeout = parse.float(timeoutStr);
             if (isNaN(timeout))
-                return this.notANumber(context, subtag);
+                throw new NotANumberError(timeoutStr);
             if (timeout < 0)
                 timeout = 0;
             if (timeout > 300)
@@ -112,16 +104,11 @@ export class WaitReactionSubtag extends BaseSubtag {
         }
 
         //* Not sure what this empty override is for
-        const reactionSubtag = context.override('reaction', { execute: () => '' });
-        const subtagOverrides = [];
-        for (const name of overrides.waitreaction) {
-            subtagOverrides.push(context.override(name, {
-                execute: (_context: BBTagContext, subtagName: string, _subtag: SubtagCall) => {
-                    return this.customError(`Subtag {${subtagName}} is disabled inside {waitreaction}`, _context, _subtag);
-                }
-            }));
-        }
+        const reactionSubtag = context.subtags.set('reaction', {
+            compile: () => undefined
+        });
 
+        const subtagOverrides = overrides.waitmessage.map(name => context.disableSubtag(name, this.name));
         const userSet = new Set(users);
         const reactionSet = new Set(parsedReactions);
         const checkReaction = reactionSet.size === 0 ? () => true : (emoji: string) => reactionSet.has(emoji);
@@ -130,20 +117,24 @@ export class WaitReactionSubtag extends BaseSubtag {
                 return false;
 
             const childContext = context.makeChild({ message });
-            childContext.override('reaction', { execute: () => reaction.emoji.toString() });
-            childContext.override('reactuser', { execute: () => user.id });
+            childContext.subtags.set('reaction', {
+                compile: () => reaction.emoji.toString()
+            });
+            childContext.subtags.set('reactuser', {
+                compile: () => user.id
+            });
 
             const result = parse.boolean(await childContext.eval(condition));
             return typeof result === 'boolean' ? result : false; //Feel like it should error if a non-boolean is returned
         }, timeout * 1000);
 
-        reactionSubtag.revert();
+        reactionSubtag.reset();
         for (const override of subtagOverrides)
-            override.revert();
+            override.reset();
         if (reaction === undefined)
-            return this.customError(`Wait timed out after ${timeout * 1000}`, context, subtag);
+            throw new BBTagRuntimeError(`Wait timed out after ${timeout * 1000}`);
         reaction;
-        return JSON.stringify([reaction.message.channel.id, reaction.message.id, reaction.user.id, reaction.reaction.emoji.toString()]);
+        return [reaction.message.channel.id, reaction.message.id, reaction.user.id, reaction.reaction.emoji.toString()];
     }
 }
 

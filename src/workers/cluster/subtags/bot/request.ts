@@ -1,5 +1,4 @@
-import { BaseSubtag, BBTagContext } from '@cluster/bbtag';
-import { SubtagCall } from '@cluster/types';
+import { BaseSubtag, BBTagContext, BBTagRuntimeError } from '@cluster/bbtag';
 import { SubtagType } from '@cluster/utils';
 import { guard } from '@core/utils';
 import fetch, { RequestInit } from 'node-fetch';
@@ -42,7 +41,7 @@ export class RequestSubtag extends BaseSubtag {
                     description: 'Performs a GET request to `url`. ',
                     exampleCode: '{jget;{request;https://blargbot.xyz/output/1111111111111111/raw};body}',
                     exampleOut: 'Hello, world!',
-                    execute: (ctx, args, subtag) => this.requestUrl(ctx, args[0].value, '', '', subtag)
+                    execute: (ctx, [url]) => this.requestUrl(ctx, url.value, '', '') as Promise<ResponseObject & JObject>
                 },
                 {
                     parameters: ['url', 'options', 'data?'],
@@ -53,7 +52,7 @@ export class RequestSubtag extends BaseSubtag {
                         'If the method is GET and a JSON object is provided for `data`, it will be formatted as query strings.',
                     exampleCode: '{jget;{request;https://example.com/update/user;{jset;;method;POST};{jset;;user;Stupid cat}};body}',
                     exampleOut: 'Stupid cat updated!',
-                    execute: (ctx, args, subtag) => this.requestUrl(ctx, args[0].value, args[1].value, args[2].value, subtag)
+                    execute: (ctx, [url, options, data]) => this.requestUrl(ctx, url.value, options.value, data.value) as Promise<ResponseObject & JObject>
                 }
             ]
         });
@@ -63,20 +62,16 @@ export class RequestSubtag extends BaseSubtag {
         context: BBTagContext,
         url: string,
         optionsStr: string,
-        dataStr: string,
-        subtag: SubtagCall
-    ): Promise<string | void> {
-        let domain;
-        if (domainRegex.test(url)) {
-            const domainRegexMatches = domainRegex.exec(url);
-            domain = domainRegexMatches !== null ? domainRegexMatches[1] : '';
-            const whitelisted = context.util.cluster.domains.isWhitelisted(domain);
-            if (!whitelisted) {
-                return this.customError('Domain is not whitelisted: ' + domain, context, subtag);
-            }
-        } else {
-            return this.customError('A domain could not be extracted from url: ' + url, context, subtag);
-        }
+        dataStr: string
+    ): Promise<ResponseObject> {
+        if (!domainRegex.test(url))
+            throw new BBTagRuntimeError('A domain could not be extracted from url: ' + url);
+
+        const domainRegexMatches = domainRegex.exec(url);
+        const domain = domainRegexMatches !== null ? domainRegexMatches[1] : '';
+        const whitelisted = context.util.cluster.domains.isWhitelisted(domain);
+        if (!whitelisted)
+            throw new BBTagRuntimeError('Domain is not whitelisted: ' + domain);
 
         const options: OptionsObject = {
             method: 'GET'
@@ -90,7 +85,7 @@ export class RequestSubtag extends BaseSubtag {
                 if (guard.hasValue(parsedJson.method)) {
                     const method = parsedJson.method.toString().toUpperCase();
                     if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method))
-                        return this.customError('', context, subtag);
+                        throw new BBTagRuntimeError('');
                     options.method = method as HTTPMethod;
                 } else {
                     options.method = 'GET';
@@ -108,9 +103,9 @@ export class RequestSubtag extends BaseSubtag {
                     } else options.headers = {};
                 }
 
-            } catch(e: unknown) {
+            } catch (e: unknown) {
                 if (e instanceof Error)
-                    return this.customError(e.message, context, subtag);
+                    throw new BBTagRuntimeError(e.message);
             }
         }
         let dataObject: JToken;
@@ -120,7 +115,7 @@ export class RequestSubtag extends BaseSubtag {
                 if (guard.hasValue(options.headers))
                     options.headers['Content-Type'] = 'application/json';
                 else // eslint-disable-next-line @typescript-eslint/naming-convention
-                    options.headers = { 'Content-Type': 'application/json'};
+                    options.headers = { 'Content-Type': 'application/json' };
             } catch (err: unknown) {
                 dataObject = dataStr;
             }
@@ -152,15 +147,15 @@ export class RequestSubtag extends BaseSubtag {
                 url: res.url
             };
             /*
-                I personally absolutely hate how blarg decides to error if a status code is not consider 'ok'
-                A lot of APIs actually have meaningful errors, coupled with a 'not-ok' status and it's ass that blarg doesn't return it.
-                TODO change this to return always regardless of statusCode OR add a parameter like [rawResponse] for getting the response object always without breaking bbtag.
-            */
+        I personally absolutely hate how blarg decides to error if a status code is not consider 'ok'
+        A lot of APIs actually have meaningful errors, coupled with a 'not-ok' status and it's ass that blarg doesn't return it.
+        TODO change this to return always regardless of statusCode OR add a parameter like [rawResponse] for getting the response object always without breaking bbtag.
+    */
             if (!(res.status >= 200 && res.status < 400))
                 throw Error(`${res.status} ${res.statusText}`);
 
             if (!(response.body instanceof Buffer)) {
-                return JSON.stringify(response);
+                return response;
             }
 
             if (contentType === null || contentType.startsWith('text') === true)
@@ -172,16 +167,15 @@ export class RequestSubtag extends BaseSubtag {
             try {
                 if (typeof response.body === 'string')
                     response.body = JSON.parse(response.body);
-            } catch(e: unknown) {
+            } catch (e: unknown) {
                 //noop
             }
-            const stringified = JSON.stringify(response);
-            //console.log(stringified);
-            return stringified;
-        } catch(e: unknown) {
+            return response;
+        } catch (e: unknown) {
             context.logger.error(e);
             if (e instanceof Error)
-                return this.customError(e.message, context, subtag);
+                throw new BBTagRuntimeError(e.message);
+            throw e;
         }
     }
 }

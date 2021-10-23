@@ -20,6 +20,7 @@ export class UserGameTypeSubtag extends BaseSubtag {
             desc: 'Game types can be any of `' + Object.values(gameTypes).filter(type => type).join(', ') + '`',
             definition: [
                 {
+                    type: 'constant',
                     parameters: [],
                     description: 'Returns how the executing user is playing a game (playing, streaming).',
                     exampleCode: 'You are {usergametype} right now!',

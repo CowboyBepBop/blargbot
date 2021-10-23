@@ -752,7 +752,7 @@ function isEmbed(payload: SendPayload): payload is MessageEmbedOptions {
     return typeof payload !== 'string' && embedKeys.some(k => k in payload);
 }
 
-const embedKeys = Object.keys<{ [P in keyof MessageEmbedOptions]-?: true }>({
+const embedKeys = Object.keys<keyof MessageEmbedOptions>({
     author: true,
     color: true,
     description: true,

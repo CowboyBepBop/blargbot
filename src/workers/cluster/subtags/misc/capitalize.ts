@@ -8,6 +8,7 @@ export class CapitalizeSubtag extends BaseSubtag {
             category: SubtagType.COMPLEX,
             definition: [
                 {
+                    type: 'constant',
                     parameters: ['text'],
                     description: 'Capitalizes the first letter of `text`, leaves the rest of the text untouched.',
                     exampleCode: '{capitalize;hello world!}\n{capitalize;hELLO world}',
@@ -15,6 +16,7 @@ export class CapitalizeSubtag extends BaseSubtag {
                     execute: (_, [{ value: text }]) => text[0].toUpperCase() + text[0].substr(1)
                 },
                 {
+                    type: 'constant',
                     parameters: ['text', 'lower'],
                     description: 'Capitalizes the first letter of `text`, and converts the rest to lowercase.',
                     exampleCode: '{capitalize;hELLO WORLD;true}\n{capitalize;hello WORLD;anything goes here}\n{capitalize;foo BAR;}',

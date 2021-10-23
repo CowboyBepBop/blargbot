@@ -535,8 +535,7 @@ export class TagCommand extends BaseGuildCommand {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { _, ...addFlags } = parse.flags([], flagsRaw);
         const flags = [...match.flags ?? []];
-        for (const flag of Object.keys(addFlags)) {
-            const args = addFlags[flag];
+        for (const [flag, args] of Object.entries(addFlags)) {
             if (args === undefined || args.length === 0)
                 return this.error(`No word was specified for the \`${flag}\` flag`);
 
@@ -583,9 +582,15 @@ export class TagCommand extends BaseGuildCommand {
         if (content === undefined)
             return;
 
-        const analysis = context.bbtag.check(content);
-        if (analysis.errors.length > 0)
-            return this.error(`There were errors with the bbtag you provided!\n${bbtagUtil.stringifyAnalysis(analysis)}`);
+        const compiled = await context.bbtag.compile(content, {
+            message: context.message,
+            author: context.message.author.id,
+            inputRaw: '',
+            isCC: false,
+            limit: 'tagLimit'
+        });
+        if (compiled.errors.length > 0)
+            return this.error(`There were errors with the bbtag you provided!\n${bbtagUtil.stringifyCompileOutput(compiled)}`);
 
         await context.database.tags.set({
             name: tagName,
@@ -603,7 +608,7 @@ export class TagCommand extends BaseGuildCommand {
             content
         });
 
-        return this.success(`Tag \`${tagName}\` ${operation}.\n${bbtagUtil.stringifyAnalysis(analysis)}`);
+        return this.success(`Tag \`${tagName}\` ${operation}.\n${bbtagUtil.stringifyCompileOutput(compiled)}`);
     }
 
     private async requestTagName(context: GuildCommandContext, name: string | undefined, query = 'Enter the name of the tag or type `c` to cancel:'): Promise<string | undefined> {

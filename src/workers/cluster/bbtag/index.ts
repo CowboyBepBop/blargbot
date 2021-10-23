@@ -2,8 +2,10 @@ import { get as getLock } from './lock';
 
 export * from './arguments';
 export * from './BaseSubtag';
+export * from './RegexSubtag';
 export * from './BBTagContext';
-export * from './BBTagError';
+export * from './SubtagProvider';
+export * from './errors';
 export * from './Caching';
 export * from './docs';
 export * from './BBTagEngine';

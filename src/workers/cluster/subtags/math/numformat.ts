@@ -9,6 +9,7 @@ export class NumFormatSubtag extends BaseSubtag {
             category: SubtagType.MATH,
             definition: [
                 {
+                    type: 'constant',
                     parameters: ['number', 'roundTo'],
                     description: 'Rounds `number` to `roundTo` digits. `roundTo` can be left empty.',
                     exampleCode: '{numformat;123456.789;2}\n{numformat;123456.789;-3}\n{numformat;100.10000}',
@@ -16,6 +17,7 @@ export class NumFormatSubtag extends BaseSubtag {
                     execute: (_, [numberStr, roundToStr]) => this.numFormat(numberStr.value, roundToStr.value, '.', '')
                 },
                 {
+                    type: 'constant',
                     parameters: ['number', 'roundTo', 'decimal:.', 'thousands?:'],
                     description: 'Rounds `number` to `roundTo` digits. Uses `decimal` as the decimal separator and `thousands` for the thousands separator. To skip `roundTo` or `decimal` leave them empty.',
                     exampleCode: '{numformat;3.1415;4;,}\n{numformat;100000;;;.}',

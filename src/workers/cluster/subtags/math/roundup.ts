@@ -1,4 +1,4 @@
-import { BaseSubtag } from '@cluster/bbtag';
+import { BaseSubtag, NotANumberError } from '@cluster/bbtag';
 import { parse, SubtagType } from '@cluster/utils';
 
 export class RoundUpSubtag extends BaseSubtag {
@@ -9,18 +9,21 @@ export class RoundUpSubtag extends BaseSubtag {
             aliases: ['ceil'],
             definition: [
                 {
+                    type: 'constant',
                     parameters: ['number'],
                     description: 'Rounds `number` up.',
                     exampleCode: '{roundup;1.23}',
                     exampleOut: '2',
-                    execute: (context, [{value: numberStr}], subtag) => {
-                        const number = parse.float(numberStr);
-                        if (isNaN(number))
-                            return this.notANumber(context, subtag);
-                        return Math.ceil(number).toString();
-                    }
+                    execute: (_, [number]) => this.roundUp(number.value)
                 }
             ]
         });
+    }
+
+    public roundUp(value: string): number {
+        const number = parse.float(value);
+        if (isNaN(number))
+            throw new NotANumberError(value);
+        return Math.ceil(number);
     }
 }

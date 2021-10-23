@@ -1,3 +1,4 @@
+import { TooManyLoopsError } from '..';
 import { BaseRuntimeLimit } from './BaseRuntimeLimit';
 import { StaffOnlyRule, UseCountRule } from './rules';
 
@@ -39,7 +40,10 @@ export class CustomCommandLimit extends BaseRuntimeLimit {
             .addRules('edit', new UseCountRule(10))
             .addRules('delete', new UseCountRule(11))
             .addRules('reactremove', new UseCountRule(10))
-            .addRules('reactremove:requests', new UseCountRule(40, ['Request', 'requests']))
+            .addRules('reactremove:requests', new UseCountRule(40, {
+                display: n => `Maximum ${n} requests`,
+                error: (_, n) => `Request limit reached for ${n}`
+            }))
             .addRules('timer', StaffOnlyRule.instance, new UseCountRule(3))
             .addRules('usersetnick', StaffOnlyRule.instance)
             .addRules('waitmessage', new UseCountRule(10))
@@ -48,10 +52,22 @@ export class CustomCommandLimit extends BaseRuntimeLimit {
                 'for:loops',
                 'repeat:loops',
                 'while:loops'
-            ], new UseCountRule(10000, ['Loop', 'loops']))
-            .addRules('foreach:loops', new UseCountRule(100000, ['Loop', 'loops']))
-            .addRules('map:loops', new UseCountRule(100000, ['Loop', 'loops']))
-            .addRules('filter:loops', new UseCountRule(100000, ['Loop', 'loops']))
+            ], new UseCountRule(10000, {
+                display: n => `Maximum ${n} loops`,
+                error: n => new TooManyLoopsError(n)
+            }))
+            .addRules('foreach:loops', new UseCountRule(100000, {
+                display: n => `Maximum ${n} loops`,
+                error: n => new TooManyLoopsError(n)
+            }))
+            .addRules('map:loops', new UseCountRule(100000, {
+                display: n => `Maximum ${n} loops`,
+                error: (_, n) => `Loop limit reached for ${n}`
+            }))
+            .addRules('filter:loops', new UseCountRule(100000, {
+                display: n => `Maximum ${n} loops`,
+                error: (_, n) => `Loop limit reached for ${n}`
+            }))
             .addRules('dump', new UseCountRule(5));
     }
 }

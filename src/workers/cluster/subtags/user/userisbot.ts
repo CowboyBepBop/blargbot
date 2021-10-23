@@ -9,11 +9,12 @@ export class UserIsBotSubtag extends BaseSubtag {
             aliases: ['userbot'],
             definition: [
                 {
+                    type: 'constant',
                     parameters: [],
                     description: 'Returns whether the executing user is a bot.',
                     exampleCode: 'Are you a bot? {userisbot}',
                     exampleOut: 'Are you a bot? false',
-                    execute: (ctx) => ctx.user.bot.toString()
+                    execute: (ctx) => ctx.user.bot
                 },
                 {
                     parameters: ['user', 'quiet?'],
@@ -30,14 +31,14 @@ export class UserIsBotSubtag extends BaseSubtag {
         context: BBTagContext,
         userId: string,
         quiet: boolean
-    ): Promise<string> {
+    ): Promise<boolean | undefined> {
         quiet ||= context.scope.quiet ?? false;
         const user = await context.queryUser(userId, { noLookup: quiet });
 
         if (user !== undefined) {
-            return user.bot.toString();
+            return user.bot;
         }
 
-        return quiet ? '' : ''; //TODO add behaviour for this????
+        return quiet ? undefined : undefined; //TODO add behaviour for this????
     }
 }

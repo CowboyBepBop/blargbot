@@ -8,6 +8,7 @@ export class RolesSubtag extends BaseSubtag {
             category: SubtagType.ROLE,
             definition: [
                 {
+                    type: 'constant',
                     parameters: [],
                     description: 'Returns an array of roles on the current guild.',
                     exampleCode: 'The roles on this guild are: {roles}.',
@@ -27,25 +28,25 @@ export class RolesSubtag extends BaseSubtag {
 
     public getGuildRoles(
         context: BBTagContext
-    ): string {
-        return JSON.stringify(context.member.roles.cache.sort((a, b) => b.position - a.position).map(r => r.id));
+    ): string[] {
+        return context.member.roles.cache.sort((a, b) => b.position - a.position).map(r => r.id);
     }
 
     public async getUserRoles(
         context: BBTagContext,
         userId: string,
         quiet: boolean
-    ): Promise<string> {
+    ): Promise<string[] | undefined> {
         quiet ||= context.scope.quiet ?? false;
         const user = await context.queryUser(userId, { noLookup: quiet });
 
         if (user !== undefined) {
             const member = await context.util.getMember(context.guild, user.id);
             if (member !== undefined) {
-                return JSON.stringify(member.roles.cache.sort((a, b) => b.position - a.position).map(r => r.id));
+                return member.roles.cache.sort((a, b) => b.position - a.position).map(r => r.id);
             }
         }
 
-        return quiet ? '' : ''; //TODO add behaviour for this????
+        return quiet ? undefined : undefined; //TODO add behaviour for this????
     }
 }

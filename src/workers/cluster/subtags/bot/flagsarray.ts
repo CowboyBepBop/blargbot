@@ -1,4 +1,5 @@
 import { BaseSubtag, BBTagContext } from '@cluster/bbtag';
+import { FlagResult } from '@cluster/types';
 import { SubtagType } from '@cluster/utils';
 
 export class FlagsArraySubtag extends BaseSubtag {
@@ -9,6 +10,7 @@ export class FlagsArraySubtag extends BaseSubtag {
             desc: 'Returns an array of all flags provided.',
             definition: [
                 {
+                    type: 'constant',
                     parameters: [],
                     exampleCode: '{flagsarray}',
                     exampleIn: 'Hello -dc world',
@@ -19,7 +21,7 @@ export class FlagsArraySubtag extends BaseSubtag {
         });
     }
 
-    public flagKeys(context: BBTagContext): string {
-        return JSON.stringify(Object.keys(context.flaggedInput));
+    public flagKeys(context: BBTagContext): Array<keyof FlagResult> {
+        return Object.keys(context.flaggedInput);
     }
 }

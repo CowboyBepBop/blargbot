@@ -9,6 +9,7 @@ export class UserStatusSubtag extends BaseSubtag {
             desc: 'Returned status can be one of `online`, `idle`, `dnd` or `offline`',
             definition: [
                 {
+                    type: 'constant',
                     parameters: [],
                     description: 'Returns the status of the user.',
                     exampleCode: 'You are currently {userstatus}',

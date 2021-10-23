@@ -1,5 +1,4 @@
-import { BaseSubtag, BBTagContext } from '@cluster/bbtag';
-import { SubtagCall } from '@cluster/types';
+import { BaseSubtag, BBTagContext, NotABooleanError } from '@cluster/bbtag';
 import { parse, SubtagType } from '@cluster/utils';
 
 export class SuppressLookupSubtag extends BaseSubtag {
@@ -13,24 +12,21 @@ export class SuppressLookupSubtag extends BaseSubtag {
                     description: 'Sets whether error messages in the lookup system (query canceled, nothing found) should be suppressed. `value` must be a boolean, and defaults to `true`.',
                     exampleCode: '{suppresslookup}',
                     exampleOut: '',
-                    execute: (ctx, [value], subtag) => this.suppress(ctx, value.value, subtag)
+                    execute: (ctx, [value]) => this.suppress(ctx, value.value)
                 }
             ]
         });
     }
 
-    public suppress(
-        context: BBTagContext,
-        value: string,
-        subtag: SubtagCall
-    ): string | void {
+    public suppress(context: BBTagContext, value: string): undefined {
         let suppress: boolean | undefined = true;
         if (value !== '') {
             suppress = parse.boolean(value);
             if (typeof suppress !== 'boolean')
-                return this.notABoolean(context, subtag);
+                throw new NotABooleanError(value);
         }
 
         context.scope.noLookupErrors = suppress;
+        return undefined;
     }
 }

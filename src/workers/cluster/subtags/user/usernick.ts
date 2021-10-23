@@ -8,11 +8,12 @@ export class UserNickSubtag extends BaseSubtag {
             category: SubtagType.USER,
             definition: [
                 {
+                    type: 'constant',
                     parameters: [],
                     description: 'Returns the nickname of the executing user.',
                     exampleCode: 'Your nick is {usernick}!',
                     exampleOut: 'Your nick is Cool Dude 1337!',
-                    execute: (ctx) => (ctx.member.nickname ?? ctx.user.username).replace(/@/g, '@\u200b')
+                    execute: (ctx) => ctx.member.nickname ?? ctx.user.username
                 },
                 {
                     parameters: ['user', 'quiet?'],
@@ -36,7 +37,7 @@ export class UserNickSubtag extends BaseSubtag {
         if (user !== undefined) {
             const member = await context.util.getMember(context.guild, user.id);
             if (member !== undefined)
-                return (member.nickname ?? user.username).replace(/@/g, '@\u200b');
+                return member.nickname ?? user.username;
         }
 
         return quiet ? '' : ''; //TODO add behaviour for this????

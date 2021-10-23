@@ -8,6 +8,7 @@ export class LowerSubtag extends BaseSubtag {
             category: SubtagType.COMPLEX,
             definition: [
                 {
+                    type: 'constant',
                     parameters: ['text'],
                     description: 'Returns `text` as lowercase.',
                     exampleCode: '{lower;THIS WILL BECOME LOWERCASE}',

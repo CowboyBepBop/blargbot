@@ -8,12 +8,13 @@ export class ArgsarraySubtag extends BaseSubtag {
             category: SubtagType.SIMPLE,
             definition: [
                 {
+                    type: 'constant',
                     parameters: [],
                     description: 'Gets user input as an array.',
                     exampleCode: 'Your input was {argsarray}',
                     exampleIn: 'Hello world!',
                     exampleOut: 'Your input was ["Hello","world!"]',
-                    execute: (ctx) => JSON.stringify(ctx.input)
+                    execute: ctx => ctx.input
                 }
             ]
         });

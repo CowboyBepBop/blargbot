@@ -10,6 +10,7 @@ export class Md5Subtag extends BaseSubtag {
             category: SubtagType.COMPLEX,
             definition: [
                 {
+                    type: 'constant',
                     parameters: ['text'],
                     description: 'Converts the provided text to md5.',
                     exampleCode: '{md5;Woosh whap phew!}',

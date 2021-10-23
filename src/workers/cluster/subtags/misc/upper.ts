@@ -8,11 +8,12 @@ export class UpperSubtag extends BaseSubtag {
             category: SubtagType.COMPLEX,
             definition: [
                 {
+                    type: 'constant',
                     parameters: ['text'],
                     description: 'Returns `text` as uppercase.',
                     exampleCode: '{upper;this will become uppercase}',
                     exampleOut: 'THIS WILL BECOME UPPERCASE',
-                    execute: (_, [{ value: text }]) => text.toUpperCase()
+                    execute: (_, [text]) => text.value.toUpperCase()
                 }
             ]
         });

@@ -1,5 +1,4 @@
-import { BaseSubtag, BBTagContext } from '@cluster/bbtag';
-import { SubtagCall } from '@cluster/types';
+import { BaseSubtag, BBTagRuntimeError } from '@cluster/bbtag';
 import { bbtagUtil, parse, SubtagType } from '@cluster/utils';
 
 const operators = bbtagUtil.operators.compare;
@@ -11,6 +10,7 @@ export class BoolSubtag extends BaseSubtag {
             category: SubtagType.COMPLEX,
             definition: [
                 {
+                    type: 'constant',
                     parameters: ['arg1', 'evaluator', 'arg2'],
                     description:
                         'Evaluates `arg1` and `arg2` using the `evaluator` and returns `true` or `false`. ' +
@@ -18,37 +18,28 @@ export class BoolSubtag extends BaseSubtag {
                         'The positions of `evaluator` and `arg1` can be swapped.',
                     exampleCode: '{bool;5;<=;10}',
                     exampleOut: 'true',
-                    execute: (ctx, args, subtag) => this.runCondition(ctx, subtag, args[0].value, args[1].value, args[2].value)
+                    execute: (_, [left, evaluator, right]) => this.runCondition(left.value, evaluator.value, right.value)
                 }
             ]
         });
     }
 
-    public runCondition(
-        context: BBTagContext,
-        subtag: SubtagCall,
-        left: string,
-        evaluator: string,
-        right: string
-    ): string {
+    public runCondition(leftStr: string, evaluator: string, rightStr: string): boolean {
         let operator;
         if (bbtagUtil.operators.isCompareOperator(evaluator)) {
             operator = evaluator;
-        } else if (bbtagUtil.operators.isCompareOperator(left)) {
-            operator = left;
-            [left, operator] = [operator, left];
-        } else if (bbtagUtil.operators.isCompareOperator(right)) {
-            operator = right;
-            [operator, right] = [right, operator];
-        } else {
-            return this.customError('Invalid operator', context, subtag);
-        }
+        } else if (bbtagUtil.operators.isCompareOperator(leftStr)) {
+            operator = leftStr;
+            [leftStr, operator] = [operator, leftStr];
+        } else if (bbtagUtil.operators.isCompareOperator(rightStr)) {
+            operator = rightStr;
+            [operator, rightStr] = [rightStr, operator];
+        } else
+            throw new BBTagRuntimeError('Invalid operator');
 
-        const leftBool = parse.boolean(left, undefined, false);
-        if (leftBool !== undefined) left = leftBool.toString();
-        const rightBool = parse.boolean(right, undefined, false);
-        if (rightBool !== undefined) right = rightBool.toString();
+        leftStr = parse.boolean(leftStr, undefined, false)?.toString() ?? leftStr;
+        rightStr = parse.boolean(rightStr, undefined, false)?.toString() ?? rightStr;
 
-        return operators[operator](left, right).toString();
+        return operators[operator](leftStr, rightStr);
     }
 }
