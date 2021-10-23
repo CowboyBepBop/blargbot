@@ -12,3 +12,4 @@ export * from './NotEnoughArgumentsError';
 export * from './TooManyArgumentsError';
 export * from './TooManyLoopsError';
 export * from './UserNotInGuildError';
+export * from './ReturnError';

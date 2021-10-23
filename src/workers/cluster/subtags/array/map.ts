@@ -30,9 +30,6 @@ export class MapSubtag extends BaseSubtag {
         const result = [];
         try {
             for (const item of array) {
-                if (context.state.return !== 0)
-                    break;
-
                 await context.limit.check(context, 'map:loops');
                 await context.variables.set(varName, item);
 

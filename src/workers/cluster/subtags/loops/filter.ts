@@ -28,9 +28,6 @@ export class FilterSubtag extends BaseSubtag {
         const subtagOverrides = overrides.filter.map(name => childContext.disableSubtag(name, this.name));
 
         for (const item of array) {
-            if (context.state.return !== 0)
-                break;
-
             await context.limit.check(context, 'filter:loops');
             await context.variables.set(varName, item);
 

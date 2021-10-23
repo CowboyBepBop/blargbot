@@ -1,10 +1,11 @@
 import { Cluster, ClusterUtilities } from '@cluster';
-import { BBTagASTCall, BBTagContextMessage, BBTagContextOptions, BBTagContextState, BBTagExecutionPlan, BBTagRuntimeScope, DebugMessage, FindEntityOptions, FlagDefinition, FlagResult, RuntimeDebugEntry, RuntimeLimit, RuntimeReturnState, SerializedBBTagContext } from '@cluster/types';
+import { BBTagASTCall, BBTagContextMessage, BBTagContextOptions, BBTagContextState, BBTagExecutionPlan, BBTagRuntimeScope, DebugMessage, FindEntityOptions, FlagDefinition, FlagResult, RuntimeDebugEntry, RuntimeLimit, SerializedBBTagContext } from '@cluster/types';
 import { bbtagUtil, guard, humanize, parse } from '@cluster/utils';
 import { Database } from '@core/database';
 import { Logger } from '@core/Logger';
 import { Timer } from '@core/Timer';
 import { ChoiceQueryResult, EntityPickQueryOptions, NamedGuildCommandTag, StoredTag } from '@core/types';
+import { AsyncIterTools } from '@core/utils/asyncIterTools';
 import { Base, Client as Discord, Collection, Guild, GuildChannels, GuildMember, GuildTextBasedChannels, MessageAttachment, MessageEmbed, MessageEmbedOptions, Permissions, Role, User } from 'discord.js';
 import { Duration } from 'moment-timezone';
 import ReadWriteLock from 'rwlock';
@@ -105,7 +106,6 @@ export class BBTagContext implements Required<BBTagContextOptions> {
             },
             outputMessage: undefined,
             ownedMsgs: [],
-            return: RuntimeReturnState.NONE,
             stackSize: 0,
             embed: undefined,
             file: undefined,
@@ -132,11 +132,12 @@ export class BBTagContext implements Required<BBTagContextOptions> {
         const context = this.makeChild(options);
         const result = await this.cluster.bbtag.execute(code, context);
         this.errors.push(...context.errors);
-        return result.content;
+        if (result.failure !== undefined)
+            return result.content;
     }
 
-    public async eval(plan: BBTagExecutionPlan): Promise<string> {
-        return await bbtagUtil.execute(this, plan);
+    public eval(plan: BBTagExecutionPlan): AsyncIterTools<string> {
+        return bbtagUtil.execute(this, plan);
     }
 
     public ownsMessage(messageId: string): boolean {

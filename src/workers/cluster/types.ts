@@ -1,4 +1,4 @@
-import { BBTagContext, limits, ScopeCollection, TagCooldownManager, VariableCache } from '@cluster/bbtag';
+import { BBTagContext, BBTagRuntimeError, limits, ScopeCollection, TagCooldownManager, VariableCache } from '@cluster/bbtag';
 import { BaseCommand, CommandContext, ScopedCommandBase } from '@cluster/command';
 import { CommandType, ModerationType, SubtagType } from '@cluster/utils';
 import { CommandPermissions, EvalRequest, EvalResult, GlobalEvalResult, GuildSourceCommandTag, IMiddleware, MasterEvalRequest, NamedGuildCommandTag, SendPayload, StoredGuildSettings, StoredTag } from '@core/types';
@@ -85,9 +85,14 @@ export type CommandManagers = { [P in keyof CommandManagerTypeMap]: ICommandMana
 export type BBTagAST = ReadonlyArray<string | BBTagASTCall>;
 
 export interface BBTagInvocation extends BBTagASTCall {
-    readonly execute: () => Awaitable<SubtagResult>;
+    readonly execute: BBTagInvocationImplementation;
 }
-export type BBTagExecutionPlan = ReadonlyArray<string | BBTagInvocation>;
+
+export interface BBTagInvocationImplementation {
+    (): Awaitable<SubtagResult>;
+}
+
+export type BBTagExecutionPlan = ReadonlyArray<string | BBTagInvocation>
 
 export interface BBTagASTCall {
     readonly name: BBTagAST;
@@ -176,7 +181,6 @@ export interface BBTagContextState {
     };
     outputMessage: Promise<string | undefined> | undefined;
     ownedMsgs: string[];
-    return: RuntimeReturnState;
     stackSize: number;
     embed: undefined | MessageEmbedOptions;
     file: undefined | FileOptions;
@@ -185,7 +189,7 @@ export interface BBTagContextState {
     replace: undefined | { regex: RegExp | string; with: string; };
     break: number;
     continue: number;
-    subtags: Record<string, number[] | undefined>;
+    subtags: Record<string, { count: number; elapsed: number; } | undefined>;
     cache: Record<string, NamedGuildCommandTag | StoredTag | null>;
     subtagCount: number;
     allowedMentions: {
@@ -214,12 +218,6 @@ export interface RuntimeLimit {
     rulesFor(subtagName: string): string[];
     serialize(): SerializedRuntimeLimit;
     load(state: SerializedRuntimeLimit): void;
-}
-
-export const enum RuntimeReturnState {
-    NONE = 0,
-    CURRENTTAG = 1,
-    ALL = -1
 }
 
 export interface BBTagContextOptions {
@@ -253,7 +251,7 @@ export interface BBTagExecutionResult {
         total: number;
         database: number;
         active: number;
-        subtag: Record<string, number[] | undefined>;
+        subtag: Record<string, { count: number; elapsed: number; } | undefined>;
     };
     database: {
         committed: number;
@@ -295,7 +293,11 @@ export interface SubtagCompiler {
 
 export type SubtagCompilerResult =
     | SubtagConstantResult
-    | (() => Awaitable<SubtagResult>);
+    | CompiledSubtag;
+
+export interface CompiledSubtag {
+    (): Awaitable<SubtagResult>;
+}
 
 export interface BBTagCompileResult {
     readonly source: string;

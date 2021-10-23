@@ -1,5 +1,5 @@
 import { BaseSubtag, BBTagContext, BBTagRuntimeError, ChannelNotFoundError, NotANumberError, NoUserFoundError } from '@cluster/bbtag';
-import { SubtagArgumentValue } from '@cluster/types';
+import { BBTagExecutionPlan } from '@cluster/types';
 import { bbtagUtil, overrides, parse, SubtagType } from '@cluster/utils';
 import { guard } from '@core/utils';
 
@@ -25,21 +25,21 @@ export class WaitMessageSubtags extends BaseSubtag {
                     description: 'Pauses the command until the executing user sends a message in the current channel.',
                     exampleCode: '{waitmessage}',
                     exampleOut: '["111111111111111","2222222222222"]',
-                    execute: (ctx) => this.awaitMessage(ctx, ctx.channel.id, ctx.user.id)
+                    execute: (ctx) => this.awaitMessage(ctx, ctx.channel.id, ctx.user.id, ['true'])
                 },
                 {
                     parameters: ['channelIDs', 'userIDs?'],
                     description: 'Pauses the command until one of `userIDs` sends a message in one of `channelIDs`',
                     exampleCode: '{waitmessage;111111111111111;{userid;stupid cat}}',
                     exampleOut: '["111111111111111", "103347843934212096"]',
-                    execute: (ctx, [channelIds, userIds]) => this.awaitMessage(ctx, channelIds.value, userIds.value)
+                    execute: (ctx, [channelIds, userIds]) => this.awaitMessage(ctx, channelIds.value, userIds.value, ['true'])
                 },
                 {
                     parameters: ['channelIDs', 'userIDs', '~condition:true', 'timeout?:60'],
                     description: 'Pauses the command until `condition` returns true when one of `userIDs` sends a message in one of `channelIDs`.',
                     exampleCode: '{waitmessage;111111111111111;{userid;stupid cat};{bool;{username};startswith;stupid};50}',
                     exampleOut: '["111111111111111", "103347843934212096"]',
-                    execute: (ctx, [channelIds, userIds, condition, timeout]) => this.awaitMessage(ctx, channelIds.value, userIds.value, condition, timeout.value)
+                    execute: (ctx, [channelIds, userIds, condition, timeout]) => this.awaitMessage(ctx, channelIds.value, userIds.value, condition.code, timeout.value)
                 }
             ]
         });
@@ -49,7 +49,7 @@ export class WaitMessageSubtags extends BaseSubtag {
         context: BBTagContext,
         channelStr: string,
         userStr: string,
-        code?: SubtagArgumentValue,
+        condition: BBTagExecutionPlan,
         timeoutStr?: string
     ): Promise<[string, string]> {
         // parse channels
@@ -81,9 +81,6 @@ export class WaitMessageSubtags extends BaseSubtag {
         } else {
             users = [context.user.id];
         }
-
-        // parse check code
-        const condition = code?.code ?? ['true'];
 
         // parse timeout
         let timeout;

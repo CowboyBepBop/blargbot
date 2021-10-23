@@ -26,6 +26,13 @@ export class IterTools<T> implements Iterable<T> {
         return IterTools.yield();
     }
 
+    public static isIterable<T>(value: unknown): value is Iterable<T> {
+        return typeof value === 'object'
+            && value !== null
+            && Symbol.iterator in value
+            && typeof (<Iterable<T>>value)[Symbol.iterator] === 'function';
+    }
+
     public static range(start: number, end: number, step?: number): IterTools<number> {
         step ??= start < end ? 1 : -1;
         if (step > 0) {
@@ -355,6 +362,66 @@ export class IterTools<T> implements Iterable<T> {
             yield* this;
             yield value;
         }, this, [value]);
+    }
+
+    public finally(action: () => void): IterTools<T> {
+        return IterTools.from({
+            [Symbol.iterator]: () => {
+                const iterator = this[Symbol.iterator]();
+                let _action: typeof action | undefined = () => {
+                    action();
+                    _action = undefined;
+                };
+                return <Iterator<T> & { close(): void; }>{
+                    get next(): Iterator<T>['next'] {
+                        const bound = iterator.next.bind(iterator);
+                        if (_action === undefined)
+                            return bound;
+
+                        const action = _action;
+                        return (...args) => {
+                            try {
+                                const result = bound(...args);
+                                if (result.done === true)
+                                    action();
+                                return result;
+                            } catch (err: unknown) {
+                                action();
+                                throw err;
+                            }
+                        };
+                    },
+                    get return(): Iterator<T>['return'] {
+                        const bound = iterator.return?.bind(iterator);
+                        if (bound === undefined || _action === undefined)
+                            return bound;
+
+                        const action = _action;
+                        return (...args) => {
+                            try {
+                                return bound(...args);
+                            } finally {
+                                action();
+                            }
+                        };
+                    },
+                    get throw(): Iterator<T>['throw'] {
+                        const bound = iterator.throw?.bind(iterator);
+                        if (bound === undefined || _action === undefined)
+                            return bound;
+
+                        const action = _action;
+                        return (...args) => {
+                            try {
+                                return bound(...args);
+                            } finally {
+                                action();
+                            }
+                        };
+                    }
+                };
+            }
+        });
     }
 
     public sort(compareFn?: (left: T, right: T) => number): IterTools<T> {

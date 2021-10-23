@@ -1,4 +1,4 @@
-import { BaseSubtag, BBTagContext } from '@cluster/bbtag';
+import { BaseSubtag, ReturnError } from '@cluster/bbtag';
 import { parse, SubtagType } from '@cluster/utils';
 
 export class ReturnSubtag extends BaseSubtag {
@@ -13,14 +13,13 @@ export class ReturnSubtag extends BaseSubtag {
                         'If `force` is `true` then it will also return from any tags calling this tag.',
                     exampleCode: 'This will display. {return} This will not.',
                     exampleOut: 'This will display.',
-                    execute: (ctx, [forced]) => this.setReturn(ctx, forced.value)
+                    execute: (_, [forced]) => this.setReturn(forced.value)
                 }
             ]
         });
     }
-    public setReturn(context: BBTagContext, forcedStr: string): undefined {
-        const forced = parse.boolean(forcedStr, true);
-        context.state.return = forced ? -1 : 1;
-        return undefined;
+    public setReturn(forcedStr: string): never {
+        const root = parse.boolean(forcedStr, true);
+        throw new ReturnError(root ? 'root' : 'scope');
     }
 }

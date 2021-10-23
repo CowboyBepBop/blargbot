@@ -1,4 +1,4 @@
-import { BBTagASTCall, BBTagExecutionPlan, RuntimeReturnState, SubtagArgumentValue } from '@cluster/types';
+import { BBTagASTCall, BBTagExecutionPlan, SubtagArgumentValue } from '@cluster/types';
 import { MessageEmbedOptions } from 'discord.js';
 
 import { ArgLengthExceededError } from '..';
@@ -60,7 +60,6 @@ export class ExecutingSubtagArgumentValue implements SubtagArgumentValue {
                     }
                 ]
             });
-            this.#context.state.return = RuntimeReturnState.ALL;
             throw new ArgLengthExceededError(this.#maxLength, this.call.args.indexOf(this.code), result.length);
         }
 

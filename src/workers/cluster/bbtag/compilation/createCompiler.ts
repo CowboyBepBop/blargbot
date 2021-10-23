@@ -1,4 +1,4 @@
-import { SubtagArgumentValue, SubtagCompiler, SubtagHandlerCallSignature, SubtagParameter, SubtagParameterGroup } from '@cluster/types';
+import { BBTagExecutionPlan, SubtagArgumentValue, SubtagCompiler, SubtagHandlerCallSignature, SubtagParameter, SubtagParameterGroup } from '@cluster/types';
 import { bbtagUtil } from '@cluster/utils';
 import { IterTools } from '@core/utils/iterTools';
 
@@ -21,7 +21,9 @@ export function createCompiler(signatures: Iterable<SubtagHandlerCallSignature>)
     const lengthLookup: Record<number, SubtagCompiler | undefined> = {};
     return {
         compile(context, name, ast) {
-            const compiler = lengthLookup[ast.args.length] ??= findCompiler(handlerFactories, ast.args.length) ?? createOutOfRangeCompiler(ast.args.length, minArgs, maxArgs);
+            const compiler = lengthLookup[ast.args.length] ??=
+                findCompiler(handlerFactories, ast.args.length)
+                ?? createOutOfRangeCompiler(ast.args.length, minArgs, maxArgs);
             return compiler.compile(context, name, ast);
         }
     };
@@ -69,6 +71,7 @@ function createPermutationBinder(signature: SubtagHandlerCallSignature, permutat
 
     return {
         compile(context, name, ast) {
+            const argPlans: BBTagExecutionPlan[] = [];
             const deferred: Array<() => SubtagArgumentValue> = [];
             const allArgs: Array<() => Awaitable<SubtagArgumentValue>> = [];
             const constant: LiteralSubtagArgumentValue[] = [];
@@ -84,9 +87,11 @@ function createPermutationBinder(signature: SubtagHandlerCallSignature, permutat
 
             for (const { p, i } of parameterOrder) {
                 if (i === undefined) {
+                    argPlans.push([p.defaultValue]);
                     constant.push(new LiteralSubtagArgumentValue(p.defaultValue));
                 } else {
                     const plan = bbtagUtil.buildExecutionPlan(context, ast.args[i]);
+                    argPlans.push(plan);
                     if (plan.every(p => typeof p === 'string'))
                         constant.push(new LiteralSubtagArgumentValue(plan.join('')));
                     else if (!p.autoResolve)

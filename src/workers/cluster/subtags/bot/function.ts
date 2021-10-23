@@ -65,8 +65,7 @@ export class FunctionSubtag extends BaseSubtag {
             compile: (_, __, funcAst) => {
                 return async () => {
                     if (context.state.stackSize >= 200) {
-                        context.state.return = -1;
-                        throw new BBTagRuntimeError('Terminated recursive tag after ' + context.state.stackSize.toString() + ' execs.');
+                        throw new BBTagRuntimeError('Terminated recursive tag after ' + context.state.stackSize.toString() + ' execs.', undefined, 'root');
                     }
                     const args = await Promise.all(funcAst.args.map(arg => context.eval(bbtagUtil.buildExecutionPlan(context, arg))));
                     const overrides = [

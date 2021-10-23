@@ -1,5 +1,5 @@
 import { BBTagContext, BBTagRuntimeError } from '@cluster/bbtag';
-import { BBTagAST, BBTagASTCall, BBTagExecutionPlan, BBTagInvocation, SubtagResult } from '@cluster/types';
+import { BBTagAST, BBTagASTCall, BBTagExecutionPlan, BBTagInvocation, CompiledSubtag, SubtagResult } from '@cluster/types';
 import { discordUtil, parse, snowflake } from '@core/utils';
 import { IterTools } from '@core/utils/iterTools';
 import { inspect } from 'util';
@@ -19,11 +19,11 @@ export function buildExecutionPlan(context: BBTagContext, ast: BBTagAST): BBTagE
                 return IterTools.yield(createDynamicInvocation(context, namePlan, item));
 
             const name = namePlan[0];
-            const subtag = context.subtags.get(name.toLowerCase());
-            if (subtag === undefined)
+            const compiler = context.subtags.get(name.toLowerCase());
+            if (compiler === undefined)
                 return IterTools.yield(createUnknownInvocation(context, name, item));
 
-            const compiled = subtag.compile(context, name, item);
+            const compiled = compiler.compile(context, name, item);
             if (typeof compiled !== 'function')
                 return resolveResult(compiled);
 
@@ -45,14 +45,14 @@ function createDynamicInvocation(context: BBTagContext, namePlan: BBTagExecution
     });
     return {
         ...ast,
-        async execute() {
-            return await dynamicInvoke(context, namePlan, ast);
+        execute() {
+            return dynamicInvoke(context, namePlan, ast);
         }
     };
 }
 
 async function dynamicInvoke(context: BBTagContext, namePlan: BBTagExecutionPlan, ast: BBTagASTCall): Promise<SubtagResult> {
-    const name = await execute(context, namePlan);
+    const name = await execute(context, namePlan).join('');
     return await compileAndInvoke(context, name, ast);
 }
 
@@ -63,39 +63,39 @@ function createUnknownInvocation(context: BBTagContext, name: string, ast: BBTag
     });
     return {
         ...ast,
-        async execute() {
-            return await compileAndInvoke(context, name, ast);
+        execute() {
+            return compileAndInvoke(context, name, ast);
         }
     };
 }
 
-async function compileAndInvoke(context: BBTagContext, name: string, ast: BBTagASTCall): Promise<SubtagResult> {
-    const compiler = context.subtags.get(name.toLowerCase());
+async function compileAndInvoke(context: BBTagContext, alias: string, ast: BBTagASTCall): Promise<SubtagResult> {
+    const compiler = context.subtags.get(alias.toLowerCase());
     if (compiler === undefined)
-        return context.addError(`Unknown subtag ${name}`, ast);
+        return context.addError(`Unknown subtag ${alias}`, ast);
 
-    const compiled = compiler.compile(context, name, ast);
+    const compiled = compiler.compile(context, alias, ast);
     if (typeof compiled !== 'function')
         return compiled;
 
-    return await invoke(context, compiled, name, ast);
+    return await invoke(context, compiled, alias, ast);
 }
 
-function createCompiledInvocation(context: BBTagContext, handler: () => Awaitable<SubtagResult>, name: string, ast: BBTagASTCall): BBTagInvocation {
+function createCompiledInvocation(context: BBTagContext, handler: CompiledSubtag, alias: string, ast: BBTagASTCall): BBTagInvocation {
     return {
         ...ast,
-        async execute() {
-            return await invoke(context, handler, name, ast);
+        execute() {
+            return invoke(context, handler, alias, ast);
         }
     };
 }
 
-async function invoke(context: BBTagContext, handler: () => Awaitable<SubtagResult>, name: string, ast: BBTagASTCall): Promise<SubtagResult> {
+async function invoke(context: BBTagContext, handler: CompiledSubtag, alias: string, ast: BBTagASTCall): Promise<SubtagResult> {
     try {
         return await handler();
     } catch (error: unknown) {
         if (error instanceof BBTagRuntimeError)
-            return context.addError(error.message, ast, error.detail);
+            return emitError(context, error, ast);
 
         const errorId = snowflake.create().toString();
         context.logger.error(errorId, error);
@@ -111,7 +111,7 @@ async function invoke(context: BBTagContext, handler: () => Awaitable<SubtagResu
                     description: description,
                     color: parse.color('red'),
                     fields: [
-                        { name: 'SubTag', value: name, inline: true },
+                        { name: 'SubTag', value: alias, inline: true },
                         { name: 'Arguments', value: ast.source.length > 100 ? ast.source.slice(0, 97) + '...' : ast.source },
                         { name: 'Tag Name', value: context.rootTagName, inline: true },
                         { name: 'Location', value: `${stringifyRange(ast)}`, inline: true },
@@ -129,4 +129,11 @@ async function invoke(context: BBTagContext, handler: () => Awaitable<SubtagResu
         });
         return context.addError('An internal server error has occurred', ast, `Error Id: ${errorId}`);
     }
+}
+
+function* emitError(context: BBTagContext, error: BBTagRuntimeError, ast: BBTagASTCall): Generator<string> {
+    if (error.emit)
+        yield context.addError(error.message, ast, error.detail);
+    if (error.terminate !== undefined)
+        throw error;
 }

@@ -1,4 +1,4 @@
-import { BBTagAST, BBTagASTCall, BBTagCompileResult, BBTagExecutionPlan, BBTagExecutionResult, DebugMessage, RuntimeReturnState } from '@cluster/types';
+import { BBTagAST, BBTagASTCall, BBTagCompileResult, BBTagExecutionPlan, BBTagExecutionResult, DebugMessage } from '@cluster/types';
 import { bbtagUtil } from '@cluster/utils';
 import { Timer } from '@core/Timer';
 import moment, { Duration } from 'moment';
@@ -41,16 +41,14 @@ class BBTagCompileResultImpl implements BBTagCompileResult {
             const remaining = moment.duration(this.context.cooldowns.get(this.context).diff(moment()));
             if (this.context.state.stackSize === 0)
                 await this.context.sendOutput(`This ${this.context.isCC ? 'custom command' : 'tag'} is currently under cooldown. Please try again <t:${moment().add(remaining).unix()}:R>.`);
-            this.context.state.return = RuntimeReturnState.ALL;
             content = this.context.addError(`Cooldown: ${remaining.asMilliseconds()}`, caller);
         } else if (this.context.state.stackSize > 200) {
-            this.context.state.return = RuntimeReturnState.ALL;
             content = this.context.addError(`Terminated recursive tag after ${this.context.state.stackSize} execs.`, caller);
         } else {
             this.context.cooldowns.set(this.context);
             this.context.execTimer.start();
             this.context.state.stackSize++;
-            content = await bbtagUtil.execute(this.context, this.executionPlan);
+            content = await bbtagUtil.execute(this.context, this.executionPlan).join('');
             if (this.context.state.replace !== undefined)
                 content = content.replace(this.context.state.replace.regex, this.context.state.replace.with);
             this.context.state.stackSize--;

@@ -8,13 +8,12 @@ import { stringify } from './stringify';
 export function createDebugOutput(result: BBTagExecutionResult): MessageOptions {
     const performance: Record<string, unknown> = {};
     for (const key of Object.keys(result.duration.subtag)) {
-        const times = result.duration.subtag[key];
-        if (times !== undefined && times.length > 0) {
-            const totalTime = times.reduce((l, r) => l + r);
+        const subtag = result.duration.subtag[key];
+        if (subtag !== undefined && subtag.count > 0) {
             performance[key] = {
-                count: times.length,
-                totalMs: totalTime,
-                averageMs: totalTime / times.length
+                count: subtag.count,
+                totalMs: subtag.elapsed,
+                averageMs: subtag.elapsed / subtag.count
             };
         }
     }

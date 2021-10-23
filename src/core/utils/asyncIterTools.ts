@@ -24,6 +24,13 @@ export class AsyncIterTools<T> implements AsyncIterable<T> {
         return AsyncIterTools.yield();
     }
 
+    public static isIterable<T>(value: unknown): value is AsyncIterable<T> {
+        return typeof value === 'object'
+            && value !== null
+            && Symbol.asyncIterator in value
+            && typeof (<AsyncIterable<T>>value)[Symbol.asyncIterator] === 'function';
+    }
+
     private readonly source: AsyncIterable<T>;
     private constructor(source: AsyncIterable<T> | Iterable<T>) {
         this.source = toAsyncIterable(source);
